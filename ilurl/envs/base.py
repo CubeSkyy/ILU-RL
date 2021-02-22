@@ -53,7 +53,9 @@ class TrafficLightEnv(Env):
         self.ts_type = env_params.additional_params.get('tls_type')
 
         # Cycle time.
-        self.cycle_time = network.cycle_time
+        # self.cycle_time = {tls_id: 60 for tls_id in self.tls_ids}
+        self.cycle_time = {'247123161': 40, '247123464': 50, '247123468': 60}
+        print('cycle time', self.cycle_time)
 
         # TLS programs (discrete action space).
         if mdp_params.action_space == 'discrete':
@@ -70,9 +72,9 @@ class TrafficLightEnv(Env):
 
         if self.ts_type in ('rl', 'random'):
             self.tsc = DecentralizedMAS(mdp_params, exp_path, seed)
-        elif self.ts_type in ('max_pressure', 'webster'):
-            self.tsc = get_ts_controller(self.ts_type, network.phases_per_tls,
-                                        self.tls_phases, self.cycle_time)
+        # elif self.ts_type in ('max_pressure', 'webster'):
+        #     self.tsc = get_ts_controller(self.ts_type, network.phases_per_tls,
+        #                                 self.tls_phases, self.cycle_time)
         elif self.ts_type in ('static', 'actuated'):
             pass # Nothing to do here.
         else:
@@ -81,8 +83,11 @@ class TrafficLightEnv(Env):
         # Reward function.
         self.reward = build_rewards(mdp_params)
 
-        self.actions_log = {}
-        self.states_log = {}
+        # Loggers.
+        self.actions_log = {tls_id: [] for tls_id in self.tls_ids}
+        self.states_log = {tls_id: [] for tls_id in self.tls_ids}
+        print('init actions_log', self.actions_log)
+        print('init states_log', self.states_log)
 
         # Overrides GYM's observation space.
         self.observation_space = State(network, mdp_params)
@@ -99,12 +104,13 @@ class TrafficLightEnv(Env):
     @property
     def duration(self):
         if self.time_counter == 0:
-            return 0.0
+            return {tls_id: 0 for tls_id in self.tls_ids}
 
         if self._duration_counter != self.time_counter:
-            self._duration = \
-                round(self._duration + self.sim_step, 2) % self.cycle_time
+            self._duration = {tid: round(self._duration[tid] + self.sim_step, 2) % self.cycle_time[tid]
+                                for tid in self.tls_ids}
             self._duration_counter = self.time_counter
+
         return self._duration
 
     # overrides GYM's observation space
@@ -116,7 +122,6 @@ class TrafficLightEnv(Env):
     def observation_space(self, observation_space):
         self._observation_space = observation_space
 
-    # TODO: create a delegate class
     @property
     def stop(self):
         return self.tsc.stop
@@ -125,8 +130,6 @@ class TrafficLightEnv(Env):
     def stop(self, stop):
         self.tsc.stop = stop
 
-    # TODO: restrict delegate property to an
-    # instance of class
     @lazy_property
     def tls_ids(self):
         return self.network.tls_ids
@@ -156,6 +159,7 @@ class TrafficLightEnv(Env):
         observation_space: ilurl.State object
 
         """
+        print('update_observation_space(); with self.duration=', self.duration)
         # Query kernel and retrieve vehicles' data.
         vehs = {nid: {p: build_vehicles(nid, data['incoming'], self.k.vehicle)
                     for p, data in self.tls_phases[nid].items()}
@@ -205,13 +209,10 @@ class TrafficLightEnv(Env):
             True;  duration == duration<state_k+1>
 
         """
-        ret = []
-        dur = int(self.duration)
-
         def fn(tid):
 
             if self.ts_type in ('rl', 'random') and \
-                (dur == 1 or self.time_counter == 1) and \
+                (self.duration[tid] == 1 or self.time_counter == 1) and \
                 self.mdp_params.action_space == 'continuous':
                 # Calculate cycle length allocations for the
                 # new cycle (continuous action space).
@@ -221,7 +222,7 @@ class TrafficLightEnv(Env):
                 num_phases = len(current_action)
 
                 # Remove yellow time from cycle length (yellow time = 6 seconds).
-                available_time = self.cycle_time - (6.0 * num_phases)
+                available_time = self.cycle_time[tid] - (6.0 * num_phases)
 
                 # Allocate time for each of the phases.
                 # By default 20% of the cycle length will be equally distributed for 
@@ -238,35 +239,41 @@ class TrafficLightEnv(Env):
                     timings.append(counter + phases_durations[p] + 6.0)
                     counter += phases_durations[p] + 6.0
 
-                timings[-1] = self.cycle_time
-                timings[-2] = self.cycle_time - 6.0
+                timings[-1] = self.cycle_time[tid]
+                timings[-2] = self.cycle_time[tid] - 6.0
 
                 # Store the signal plan. This variable stores the signal
                 # plan to be executed throughout the current cycle.
                 self.signal_plans_continous[tid] = timings
 
-            if (dur == 0 and self.step_counter > 1):
+            if (self.duration[tid] == 0 and self.step_counter > 1):
                 # New cycle.
                 return True
 
             if self.ts_type == 'static':
-                return dur in self.tls_durations[tid]
+                return self.duration[tid] in self.tls_durations[tid]
             elif self.ts_type == 'webster':
-                return dur in self.webster_timings[tid]
+                return self.duration[tid] in self.webster_timings[tid]
             elif self.ts_type in ('rl', 'random'):
                 if self.mdp_params.action_space == 'discrete':
                     # Discrete action space: TLS programs.
                     progid = self._current_rl_action()[tid]
-                    return dur in self.programs[tid][progid]
+                    return self.duration[tid] in self.programs[tid][progid]
                 else:
                     # Continuous action space: phases durations.
-                    return dur in self.signal_plans_continous[tid]
+                    return self.duration[tid] in self.signal_plans_continous[tid]
             else:
                 raise ValueError(f'Unknown ts_type:{self.ts_type}')
 
         ret = [fn(tid) for tid in self.tls_ids]
 
         return tuple(ret)
+
+    def _get_tscs_to_update(self):
+        if self.time_counter == 1:
+            return self.tls_ids # All.
+        else:
+            return [tls_id for (tls_id, dur) in self.duration.items() if dur == 0]
 
     def apply_rl_actions(self, rl_actions):
         """ Specify the actions to be performed.
@@ -277,36 +284,57 @@ class TrafficLightEnv(Env):
             actions to be performed
 
         """
+        print('-'*20)
+        print('CALLED apply_rl_actions()')
         self.update_observation_space()
 
         if is_controller_periodic(self.ts_type):
 
-            if self.ts_type in ('rl', 'random') and \
-                (self.duration == 0 or self.time_counter == 1):
-                # New cycle.
+            if self.ts_type in ('rl', 'random'):
 
-                # Get the number of the current cycle.
-                cycle_number = \
-                    int(self.step_counter / self.cycle_time)
+                # Get TSCs to update at current timestep.
+                tls_ids = self._get_tscs_to_update()
+                # print('TSCS selected=', tls_ids, 'at duration=', self.duration)
 
-                # Get current state.
-                state = self.get_state()
+                if any(tls_ids):
 
-                # Select new action.
-                if rl_actions is None:
-                    rl_action = self._rl_actions(state)
-                else:
-                    rl_action = rl_actions
+                    # Calculate and filter state.
+                    state = self.get_state()
+                    state = {tid: state[tid] for tid in tls_ids}
+                    # print('state=', state)
 
-                self.actions_log[cycle_number] = rl_action
-                self.states_log[cycle_number] = state
+                    # Select new action.
+                    if rl_actions is None:
+                        rl_action = self._rl_actions(state)
+                    else:
+                        rl_action = rl_actions
 
-                if self.step_counter > 1:
-                    # RL-agent update.
-                    reward = self.compute_reward(None)
-                    prev_state = self.states_log[cycle_number - 1]
-                    prev_action = self.actions_log[cycle_number - 1]
-                    self.tsc.update(prev_state, prev_action, reward, state)
+                    # print('rl_action=', rl_action)
+
+                    # Store in logger.
+                    for tid in tls_ids:
+                        self.actions_log[tid].append(rl_action[tid])
+                        self.states_log[tid].append(state[tid])
+
+                    # print('self.actions_log', self.actions_log)
+                    # print('self.states_log', self.states_log)
+
+                    if self.step_counter > 1:
+                        # RL-agent update.
+                        reward = self.compute_reward(None)
+
+                        # Get and filter states, actions, and rewards for learning update.
+                        reward = {tid: reward[tid] for tid in tls_ids}
+                        prev_state = {tid: self.states_log[tid][-2] for tid in tls_ids}
+                        prev_action = {tid: self.actions_log[tid][-2] for tid in tls_ids}
+                        state = {tid: self.states_log[tid][-1] for tid in tls_ids}
+
+                        # print(prev_state)
+                        # print(prev_action)
+                        # print(reward)
+                        # print(state)
+
+                        self.tsc.update(prev_state, prev_action, reward, state)
 
             if self.ts_type == 'webster':
                 kernel_data = {nid: {p: build_vehicles(nid, data['incoming'], self.k.vehicle)
@@ -318,6 +346,7 @@ class TrafficLightEnv(Env):
                 pass # Nothing to do here.
 
             self._apply_tsc_actions(self._periodic_control_actions())
+            print('-'*20)
 
         else:
             # Aperiodic controller.
@@ -351,11 +380,7 @@ class TrafficLightEnv(Env):
 
     def _current_rl_action(self):
         """ Returns current action. """
-        N = (self.cycle_time / self.sim_step)
-        actid = \
-            int(max(0, self.step_counter - 1) / N)
-
-        return self.actions_log[actid]
+        return {tid: actions[-1] for (tid, actions) in self.actions_log.items()}
 
     def compute_reward(self, rl_actions, **kwargs):
         """ Reward calculation.
@@ -385,7 +410,7 @@ class TrafficLightEnv(Env):
         # the beggining of the cycle, i.e. it measures (in seconds)
         # for how long the current configuration has been going on.
         self._duration_counter = -1
-        self._duration = self.time_counter * self.sim_step
+        self._duration = {tls_id: self.time_counter * self.sim_step for tls_id in self.tls_ids}
 
         # Stores the state index.
         self._tls_phase_indicator = {}
