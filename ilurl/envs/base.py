@@ -30,6 +30,8 @@ from ilurl.envs.controllers import get_ts_controller, is_controller_periodic
 from ilurl.mas.decentralized import DecentralizedMAS
 
 
+_DEBUG = False
+
 class TrafficLightEnv(Env):
     """
         Environment used to train traffic light systems.
@@ -52,14 +54,9 @@ class TrafficLightEnv(Env):
         # ('rl', 'random', 'static', 'webster', 'actuated' or 'max-pressure').
         self.ts_type = env_params.additional_params.get('tls_type')
 
-        # Cycle time.
-        # self.cycle_time = {tls_id: 60 for tls_id in self.tls_ids}
-        self.cycle_time = {'247123161': 40, '247123464': 50, '247123468': 60}
-        print('cycle time', self.cycle_time)
-
         # TLS programs (discrete action space).
         if mdp_params.action_space == 'discrete':
-            self.programs = network.programs
+            self.rl_actions = network.rl_actions
 
         # Keeps the internal value of sim step.
         self.sim_step = sim_params.sim_step
@@ -86,8 +83,6 @@ class TrafficLightEnv(Env):
         # Loggers.
         self.actions_log = {tls_id: [] for tls_id in self.tls_ids}
         self.states_log = {tls_id: [] for tls_id in self.tls_ids}
-        print('init actions_log', self.actions_log)
-        print('init states_log', self.states_log)
 
         # Overrides GYM's observation space.
         self.observation_space = State(network, mdp_params)
@@ -103,17 +98,24 @@ class TrafficLightEnv(Env):
 
     @property
     def duration(self):
-        if self.time_counter == 0:
-            return {tls_id: 0 for tls_id in self.tls_ids}
+
+        if self.time_counter == 1: # First timestep.
+            return self._duration
 
         if self._duration_counter != self.time_counter:
-            self._duration = {tid: round(self._duration[tid] + self.sim_step, 2) % self.cycle_time[tid]
-                                for tid in self.tls_ids}
+            # Calculate new 'duration' variable.
+            duration = {}
+            for tid in self.tls_ids:
+                tid_action = self._current_rl_action()[tid]
+                duration[tid] = round(self._duration[tid] + self.sim_step, 2) % \
+                                self.rl_actions[tid][tid_action]["cycle_time"]
+            self._duration = duration
+
             self._duration_counter = self.time_counter
 
         return self._duration
 
-    # overrides GYM's observation space
+    # Overrides OPENAI GYM's observation space.
     @property
     def observation_space(self):
         return self._observation_space
@@ -159,7 +161,8 @@ class TrafficLightEnv(Env):
         observation_space: ilurl.State object
 
         """
-        print('update_observation_space(); with self.duration=', self.duration)
+        if _DEBUG:
+            print('update_observation_space(); with self.duration=', self.duration)
         # Query kernel and retrieve vehicles' data.
         vehs = {nid: {p: build_vehicles(nid, data['incoming'], self.k.vehicle)
                     for p, data in self.tls_phases[nid].items()}
@@ -209,6 +212,8 @@ class TrafficLightEnv(Env):
             True;  duration == duration<state_k+1>
 
         """
+        if _DEBUG:
+            print('CALLING _periodic_control_actions(self)')
         def fn(tid):
 
             if self.ts_type in ('rl', 'random') and \
@@ -258,7 +263,7 @@ class TrafficLightEnv(Env):
                 if self.mdp_params.action_space == 'discrete':
                     # Discrete action space: TLS programs.
                     progid = self._current_rl_action()[tid]
-                    return self.duration[tid] in self.programs[tid][progid]
+                    return self.duration[tid] in self.rl_actions[tid][progid]["timings"]
                 else:
                     # Continuous action space: phases durations.
                     return self.duration[tid] in self.signal_plans_continous[tid]
@@ -267,11 +272,14 @@ class TrafficLightEnv(Env):
 
         ret = [fn(tid) for tid in self.tls_ids]
 
+        if _DEBUG:
+            print('_periodic_control_actions RET=', ret)
+
         return tuple(ret)
 
     def _get_tscs_to_update(self):
         if self.time_counter == 1:
-            return self.tls_ids # All.
+            return self.tls_ids # First timestep - update all.
         else:
             return [tls_id for (tls_id, dur) in self.duration.items() if dur == 0]
 
@@ -284,8 +292,10 @@ class TrafficLightEnv(Env):
             actions to be performed
 
         """
-        print('-'*20)
-        print('CALLED apply_rl_actions()')
+        if _DEBUG:
+            print('-'*40)
+            print('self.duration', self.duration)
+
         self.update_observation_space()
 
         if is_controller_periodic(self.ts_type):
@@ -294,14 +304,18 @@ class TrafficLightEnv(Env):
 
                 # Get TSCs to update at current timestep.
                 tls_ids = self._get_tscs_to_update()
-                # print('TSCS selected=', tls_ids, 'at duration=', self.duration)
+
+                if _DEBUG:
+                    print('TSCS selected=', tls_ids, 'at duration=', self.duration)
 
                 if any(tls_ids):
 
                     # Calculate and filter state.
                     state = self.get_state()
                     state = {tid: state[tid] for tid in tls_ids}
-                    # print('state=', state)
+
+                    if _DEBUG:
+                        print('state=', state)
 
                     # Select new action.
                     if rl_actions is None:
@@ -309,15 +323,17 @@ class TrafficLightEnv(Env):
                     else:
                         rl_action = rl_actions
 
-                    # print('rl_action=', rl_action)
+                    if _DEBUG:
+                        print('rl_action=', rl_action)
 
                     # Store in logger.
                     for tid in tls_ids:
                         self.actions_log[tid].append(rl_action[tid])
                         self.states_log[tid].append(state[tid])
 
-                    # print('self.actions_log', self.actions_log)
-                    # print('self.states_log', self.states_log)
+                    if _DEBUG:
+                        print('self.actions_log', self.actions_log)
+                        print('self.states_log', self.states_log)
 
                     if self.step_counter > 1:
                         # RL-agent update.
@@ -329,10 +345,11 @@ class TrafficLightEnv(Env):
                         prev_action = {tid: self.actions_log[tid][-2] for tid in tls_ids}
                         state = {tid: self.states_log[tid][-1] for tid in tls_ids}
 
-                        # print(prev_state)
-                        # print(prev_action)
-                        # print(reward)
-                        # print(state)
+                        if _DEBUG:
+                            print(prev_state)
+                            print(prev_action)
+                            print(reward)
+                            print(state)
 
                         self.tsc.update(prev_state, prev_action, reward, state)
 
@@ -344,9 +361,15 @@ class TrafficLightEnv(Env):
 
             if self.ts_type  == 'static':
                 pass # Nothing to do here.
+            
+            if _DEBUG:
+                print('*'*20)
 
             self._apply_tsc_actions(self._periodic_control_actions())
-            print('-'*20)
+
+            if _DEBUG:
+                print('*'*20)
+                print('-'*40)
 
         else:
             # Aperiodic controller.
@@ -410,7 +433,7 @@ class TrafficLightEnv(Env):
         # the beggining of the cycle, i.e. it measures (in seconds)
         # for how long the current configuration has been going on.
         self._duration_counter = -1
-        self._duration = {tls_id: self.time_counter * self.sim_step for tls_id in self.tls_ids}
+        self._duration = {tls_id: 0 for tls_id in self.tls_ids}
 
         # Stores the state index.
         self._tls_phase_indicator = {}
@@ -419,8 +442,6 @@ class TrafficLightEnv(Env):
                 self._tls_phase_indicator[node_id] = 0
                 s0 = self.tls_states[node_id][0]
                 self.k.traffic_light.set_state(node_id=node_id, state=s0)
-
-                # Notify controller.
 
         # Observation space.
         self.observation_space.reset()

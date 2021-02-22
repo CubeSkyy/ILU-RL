@@ -3,6 +3,7 @@
 __author__ = 'Guilherme Varela'
 __date__ = '2020-01-30'
 import os
+import json
 import math
 from operator import itemgetter
 from collections import OrderedDict
@@ -211,7 +212,7 @@ def get_logic(network_id):
 
 
 def get_tls_custom(network_id, baseline=False):
-    """ Loads TLS settings (cycle time and programs) from tls_config.json file.
+    """ Loads TLS settings (cycle times and phase splits) from tls_config.json file.
 
         Parameters:
         ----------
@@ -223,12 +224,13 @@ def get_tls_custom(network_id, baseline=False):
 
         Return:
         -------
-        cycle_time: int
-        the cycle time for the TLS system
+        cycle_time(s): int or list of ints
+        the cycle time(s) for the TLS system
 
-        programs: dict
-        the programs (timings) for the TLS system
-        defines the actions that the agent can pick
+        programs or phase splits: dict
+        If not baseline: the phase (timings) for the TLS system
+        defines the actions that the agent can pick if age.
+        If baseline: returns the actuated controller program.
 
     """
     tls_config_file = f'{DIR}/{network_id}/tls_config.json'
@@ -241,22 +243,44 @@ def get_tls_custom(network_id, baseline=False):
         cfgs = json.load(f)
 
     cfgs = cfgs['actuated'] if baseline else cfgs['rl']
-    if 'cycle_time' not in cfgs:
-        raise KeyError(f'Missing `cycle_time` key in tls_config.json')
-    else:
-        # Setup cycle time.
-        cycle_time = cfgs.pop('cycle_time')
 
-    # Setup programs.
+    # TODO:Fix this to work with the baselines.
     if baseline:
-        programs = cfgs
+        raise ValueError(f'UNINPLEMENTED FOR BASELINES.')
     else:
-        programs = {}
+        actions = {}
         for tls_id, data in cfgs.items():
 
-            # Setup actions (programs) for given TLS.
-            programs[tls_id] = \
-                {int(action): data[action] for action in data.keys()}
+            # Setup actions.
+            actions[tls_id] = \
+                {int(action): {"cycle_time": signal_plan["cycle_time"],
+                            "timings": signal_plan["timings"]} \
+                    for (action, signal_plan) in data.items()}
 
-    return cycle_time, programs
+    return actions
 
+
+def get_rl_actions(network_id):
+    """
+        Loads the actions of the RL agents.
+    """
+    tls_config_file = f'{DIR}/{network_id}/tls_config.json'
+
+    if not os.path.isfile(tls_config_file):
+        raise FileNotFoundError("tls_config.json file not provided "
+                "for network {0}.".format(network_id))
+
+    with open(tls_config_file, 'r') as f:
+        cfgs = json.load(f)
+
+    cfgs = cfgs['rl']
+
+    actions = {}
+    for tls_id, data in cfgs.items():
+
+        actions[tls_id] = \
+            {int(action): {"cycle_time": signal_plan["cycle_time"],
+                        "timings": signal_plan["timings"]} \
+                for (action, signal_plan) in data.items()}
+
+    return actions
