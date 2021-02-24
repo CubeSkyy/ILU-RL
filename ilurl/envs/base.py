@@ -83,6 +83,7 @@ class TrafficLightEnv(Env):
         # Loggers.
         self.actions_log = {tls_id: [] for tls_id in self.tls_ids}
         self.states_log = {tls_id: [] for tls_id in self.tls_ids}
+        self.rewards_log = {tls_id: [] for tls_id in self.tls_ids}
 
         # Overrides GYM's observation space.
         self.observation_space = State(network, mdp_params)
@@ -331,13 +332,17 @@ class TrafficLightEnv(Env):
                         self.actions_log[tid].append(rl_action[tid])
                         self.states_log[tid].append(state[tid])
 
-                    if _DEBUG:
-                        print('self.actions_log', self.actions_log)
-                        print('self.states_log', self.states_log)
-
                     if self.step_counter > 1:
                         # RL-agent update.
                         reward = self.compute_reward(None)
+
+                        for tid in tls_ids:
+                            self.rewards_log[tid].append(reward[tid])
+
+                        if _DEBUG:
+                            print('self.actions_log', self.actions_log)
+                            print('self.states_log', self.states_log)
+                            print('self.rewards_log', self.rewards_log)
 
                         # Get and filter states, actions, and rewards for learning update.
                         reward = {tid: reward[tid] for tid in tls_ids}

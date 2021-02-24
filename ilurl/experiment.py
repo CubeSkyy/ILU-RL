@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 import numpy as np
 
-from ilurl.utils.precision import action_to_double_precision
+from ilurl.utils.precision import single_to_double_precision
 
 # TODO: Track those anoying warning
 warnings.filterwarnings('ignore')
@@ -128,73 +128,48 @@ class Experiment:
 
         info_dict = {}
 
-        observation_spaces = []
-        rewards = []
         vels = []
         vehs = []
-
         veh_ids = []
         veh_speeds = []
-
-        agent_updates_counter = 0
 
         state = self.env.reset()
 
         for step in tqdm(range(num_steps)):
 
-            # WARNING: Env reset is not synchronized with agents' cycle time.
-            # if step % 86400 == 0 and agent_updates_counter != 0: # 24 hours
-            #     self.env.reset()
-
-            state, reward, done, _ = self.env.step(rl_actions(state))
+            state, _, done, _ = self.env.step(rl_actions(state))
 
             step_ids = self.env.k.vehicle.get_ids()
             step_speeds = [s for s in self.env.k.vehicle.get_speed(step_ids) if s > 0]
-
             veh_ids.append(len(step_speeds))
             veh_speeds.append(np.nanmean(step_speeds))
 
-            if self._is_save_step():
-
-                observation_spaces.append(
-                    self.env.observation_space.feature_map())
-
-                rewards.append(reward)
-
+            # Every 5 minutes (in simulation time),
+            # log the number and velocity of the vehicles.
+            if step % 300 == 0:
                 vehs.append(np.nanmean(veh_ids).round(4))
                 vels.append(np.nanmean(veh_speeds).round(4))
                 veh_ids = []
                 veh_speeds = []
 
-                agent_updates_counter += 1
-
-            if done and stop_on_teleports:
-                break
-
-            if self.save_agent and self.tls_type == 'rl' and \
-                self._is_save_agent_step(agent_updates_counter):
-                self.env.tsc.save_checkpoint(self.exp_path)
+            # if done and stop_on_teleports:
+            #     break
 
         # Save train log (data is aggregated per traffic signal).
-        info_dict["rewards"] = rewards
-        info_dict["velocities"] = vels
         info_dict["vehicles"] = vehs
-        info_dict["observation_spaces"] = observation_spaces
-        info_dict["actions"] = action_to_double_precision([a for a in self.env.actions_log.values()])
-        info_dict["states"] = [s for s in self.env.states_log.values()]
+        info_dict["velocities"] = vels
+        info_dict["states"] = single_to_double_precision(self.env.states_log)
+        info_dict["actions"] = single_to_double_precision(self.env.actions_log)
+        info_dict["rewards"] = single_to_double_precision(self.env.rewards_log)
+
+        print(info_dict)
+
+        # Save final agents.
+        if self.save_agent and self.tls_type == 'rl':
+            self.env.tsc.save_checkpoint(self.exp_path)
 
         if self.tls_type not in ('static', 'actuated'):
             self.env.tsc.terminate()
         self.env.terminate()
 
         return info_dict
-
-    def _is_save_step(self):
-        if self.cycle is not None:
-            return self.env.duration == 0.0
-        return False
-
-    def _is_save_agent_step(self, counter):
-        if self.env.duration == 0.0 and counter % self.save_agent_interval == 0:
-            return self.train and self.exp_path
-        return False

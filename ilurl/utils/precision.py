@@ -19,7 +19,7 @@ def double_to_single_precision(nested_value: types.Nest) -> types.Nest:
 
     return tree.map_structure(_convert_single_value, nested_value)
 
-def action_to_double_precision(nested_value: types.Nest) -> types.Nest:
+def single_to_double_precision(nested_value: types.Nest) -> types.Nest:
     """Convert a nested value given a desired nested spec."""
 
     def _convert_single_value(value):
