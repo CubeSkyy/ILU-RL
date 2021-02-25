@@ -162,8 +162,6 @@ class Experiment:
         info_dict["actions"] = single_to_double_precision(self.env.actions_log)
         info_dict["rewards"] = single_to_double_precision(self.env.rewards_log)
 
-        print(info_dict)
-
         # Save final agents.
         if self.save_agent and self.tls_type == 'rl':
             self.env.tsc.save_checkpoint(self.exp_path)

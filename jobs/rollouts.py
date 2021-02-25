@@ -46,17 +46,12 @@ class NonDaemonicPool(multiprocessing.pool.Pool):
 def get_arguments():
     parser = argparse.ArgumentParser(
         description="""
-            This scripts runs recursively a rollout for every checkpoint stored
-            on the experiment path. If test is set to True only the last checkpoints
-            will be used.
+            This scripts runs a set of rollouts for every checkpoint stored
+            on the experiment path.
         """
     )
     parser.add_argument('experiment_dir', type=str, nargs='?',
                         help='''A directory which it\'s subdirectories are train runs.''')
-
-    parser.add_argument('--test', '-t', dest='test', type=str2bool,
-                        default=False, nargs='?',
-                        help='If true only the last checkpoints will be used.')
 
     parsed = parser.parse_args()
     sys.argv = [sys.argv[0]]
@@ -101,7 +96,7 @@ def concat(evaluations):
     result = {}
     result['id'] = []
     for qtb in evaluations:
-        exid = qtb.pop('id')
+        exid = 99999
         # can either be a rollout from the prev
         # exid or a new experiment
         if exid not in result['id']:
@@ -126,7 +121,7 @@ def concat(evaluations):
     return result
 
 
-def rollout_batch(test=False, experiment_dir=None):
+def rollout_batch(experiment_dir=None):
 
     print('\nRUNNING jobs/rollouts.py\n')
 
@@ -137,7 +132,6 @@ def rollout_batch(test=False, experiment_dir=None):
         # Clear command line arguments after parsing.
 
         batch_path = Path(args.experiment_dir)
-        test = args.test
 
     else:
         batch_path = Path(experiment_dir)
@@ -149,23 +143,8 @@ def rollout_batch(test=False, experiment_dir=None):
 
     # Get checkpoints numbers.
     chkpts_dirs = [p for p in batch_path.rglob(chkpt_pattern)]
-    chkpts_nums = [int(n.name) for n in chkpts_dirs[0].iterdir()]
-    if len(chkpts_nums) == 0:
+    if len(chkpts_dirs) == 0:
         raise ValueError('No checkpoints found.')
-
-    chkpts_nums = sorted(chkpts_nums)
-
-    # If test then pick only the last checkpoints.
-    if test:
-        chkpts_nums = [chkpts_nums[-1]]
-        rollouts_paths = list(itertools.product(experiment_names, chkpts_nums))
-    
-        print('jobs/rollouts.py (test mode): using checkpoints'
-                ' number {0}'.format(chkpts_nums[0]))
-    else:
-        rollouts_paths = list(itertools.product(experiment_names, chkpts_nums))
-
-    # print(rollouts_paths)
 
     run_config = configparser.ConfigParser()
     run_config.read(str(CONFIG_PATH / 'run.config'))
@@ -193,44 +172,22 @@ def rollout_batch(test=False, experiment_dir=None):
     num_rollouts = int(rollouts_config.get('rollouts_args', 'num-rollouts'))
     rollouts_config.remove_option('rollouts_args', 'num-rollouts')
 
-    if test:
-        # Override rollouts config files with test.config file parameters.
-        test_config = configparser.ConfigParser()
-        test_config.read(str(CONFIG_PATH / 'test.config'))
-
-        num_rollouts = int(test_config.get('test_args', 'num-rollouts'))
-        rollout_time = test_config.get('test_args', 'rollout-time')
-
-        # Overwrite defaults.
-        rollouts_config.set('rollouts_args', 'rollout-time', rollout_time)
-
-        token = 'test'
-
-        # Test mode defaults below (DO NOT CHANGE THESE).
-        # Write .xml files for test plots creation.
-        rollouts_config.set('rollouts_args', 'sumo-emission', str(True))
-
-    else:
-
-        token = 'rollouts'
-
-        # Non-test mode defaults below (DO NOT CHANGE THESE).
-        # Do not write .xml files due to performance and memory issues.
-        rollouts_config.set('rollouts_args', 'sumo-emission', str(False))
+    # Write .xml files for plots creation.
+    rollouts_config.set('rollouts_args', 'sumo-emission', str(True))
 
     rollout_time = rollouts_config.get('rollouts_args', 'rollout-time')
-    print(f'\nArguments (jobs/{token}.py):')
+    print(f'\nArguments (jobs/rollouts.py):')
     print('-------------------------')
     print(f'Experiment dir: {batch_path}')
     print(f'Number of processors: {num_processors}')
-    print(f'Num. rollout files: {len(rollouts_paths)}')
-    print(f'Num. rollout repetitions: {num_rollouts}')
-    print(f'Num. rollout total: {len(rollouts_paths) * num_rollouts}')
+    print(f'Num. train runs found: {len(experiment_names)}')
+    print(f'Num. rollouts per train run: {num_rollouts}')
+    print(f'Num. rollout total: {len(experiment_names) * num_rollouts}')
     print(f'Rollout time: {rollout_time}\n')
 
     # Allocate seeds.
     custom_configs = []
-    for rn, rp in enumerate(rollouts_paths):
+    for rn, rp in enumerate(experiment_names):
         base_seed = max(train_seeds) + num_rollouts * rn
         for rr in range(num_rollouts):
             seed = base_seed + rr + 1
@@ -245,16 +202,15 @@ def rollout_batch(test=False, experiment_dir=None):
         rollouts_cfg_paths = []
         cfg_key = "rollouts_args"
         for cfg in custom_configs:
-            run_path, chkpt_num = cfg[0]
+            run_path = cfg[0]
             seed = cfg[1]
 
             # Setup custom rollout settings.
             rollouts_config.set(cfg_key, "run-path", str(run_path))
-            rollouts_config.set(cfg_key, "chkpt-number", str(chkpt_num))
             rollouts_config.set(cfg_key, "seed", str(seed))
             
             # Write temporary train config file.
-            cfg_path = tmp_path / f'rollouts-{run_path.name}-{chkpt_num}-{seed}.config'
+            cfg_path = tmp_path / f'rollouts-{run_path.name}-{seed}.config'
             rollouts_cfg_paths.append(str(cfg_path))
             with cfg_path.open('w') as fw:
                 rollouts_config.write(fw)
@@ -271,8 +227,7 @@ def rollout_batch(test=False, experiment_dir=None):
                 rvs.append(delay_roll((0.0, [cfg])))
 
     res = concat(rvs)
-    filepart = 'test' if test else 'eval'
-    filename = f'rollouts_{filepart}.json'
+    filename = f'rollouts_test.json'
     target_path = batch_path / filename
     with target_path.open('w') as fj:
         json.dump(res, fj)
@@ -282,9 +237,9 @@ def rollout_batch(test=False, experiment_dir=None):
     return str(batch_path)
 
 @processable
-def rollout_job(test=False):
+def rollout_job():
     # Suppress textual output.
-    return rollout_batch(test=test)
+    return rollout_batch()
 
 if __name__ == '__main__':
     #rollout_job()

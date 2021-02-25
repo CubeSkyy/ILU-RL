@@ -120,10 +120,10 @@ class DecentralizedMAS(MASInterface):
         for (tid, agent) in self.agents.items():
             agent.receive()
 
-    def load_checkpoint(self, chkpts_dir_path, chkpt_num):
+    def load_checkpoint(self, chkpts_dir_path):
         # Send requests.
         for (tid, agent) in self.agents.items():
-            agent.load_checkpoint(chkpts_dir_path, chkpt_num)
+            agent.load_checkpoint(chkpts_dir_path)
 
         # Synchronize.
         for (tid, agent) in self.agents.items():

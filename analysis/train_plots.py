@@ -295,7 +295,7 @@ def main(experiment_root_folder=None):
         for col in df_actions.columns:
             plt.plot(df_actions[col], label=col)
 
-        plt.ylim(-0.2,max_action)
+        plt.ylim(-0.2,max_action+0.5)
 
         plt.xlabel('Decision step')
         plt.ylabel('Action')
@@ -314,7 +314,7 @@ def main(experiment_root_folder=None):
         for col in df_actions.columns:
             plt.plot(df_actions[col].rolling(window=window_size).mean(), label=col)
 
-        plt.ylim(-0.2,max_action)
+        plt.ylim(-0.2,max_action+0.5)
 
         plt.xlabel('Decision step')
         plt.ylabel('Action')
