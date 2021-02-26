@@ -35,6 +35,7 @@ from jobs.convert2csv import xml2csv
 from analysis.train_plots import main as train_plots
 from analysis.rollouts import main as rollouts_plots
 from analysis.test_plots import main as test_plots
+from analysis.tensorboard_plots import main as tb_plots
 
 from ilurl.utils.decorators import safe_run
 
@@ -58,6 +59,7 @@ if __name__ == '__main__':
 
     # 2) Create train plots.
     train_plots(experiment_root_path)
+    tb_plots(experiment_root_path)
 
     # 3) Execute rollouts with last saved checkpoints (test).
     rollouts(experiment_dir=experiment_root_path)
