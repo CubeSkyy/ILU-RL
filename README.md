@@ -1,6 +1,6 @@
-# ILU - (I)ntegrative (L)earning from (U)rban Data: Reinforcement learning-based traffic signal controllers
+# ILU - (I)ntegrative (L)earning from (U)rban Data: Reinforcement Learning-based Adaptive Traffic Signal Control
 
-This experimental project researches the development of RL-based traffic signal controllers.
+This experimental project researches the development of RL-based adaptive traffic signal controllers.
 
 ## Installation 
 This project requires the installation of the computational framework for reinforcement learning (RL) in traffic control [FLOW](https://github.com/flow-project/flow) and the RL framework [acme](https://github.com/deepmind/acme).
@@ -12,11 +12,11 @@ Locally install the flow package. An installation guide can be found [here](http
 	virtualenv -p python3 env_flow
 	source env_flow/bin/activate
 	```
- 2. Clone [FLOW-Project](https://github.com/flow-project/flow) repository
+ 2. Clone the [FLOW-Project](https://github.com/flow-project/flow) repository
 	```bash
 	git clone https://github.com/flow-project/flow
 	```
- 3. Install FLOW
+ 3. Install FLOW (checkout to 50be2d074027fb465fc4a9103b3cc09fb1123ede)
 	```bash
 	pip install -e flow/
 	```
@@ -51,9 +51,9 @@ Locally install the ILU-RL package.
 	virtualenv -p python3 env_ILU-RL
 	source env_ILU-RL/bin/activate
 	```
- 2. Clone [ILU-RL](https://github.com/PPSantos/ILU-RL) repository
+ 2. Clone the [ILU-RL](https://github.com/GAIPS/ILU-RL) repository
 	```bash
-	git clone https://github.com/PPSantos/ILU-RL
+	git clone https://github.com/GAIPS/ILU-RL
 	```
 3. Install packages
 	```bash
@@ -61,7 +61,7 @@ Locally install the ILU-RL package.
 	pip install -e flow/
 	pip install -e ILU-RL/
 	```
-4. Install acme framework
+4. Install acme framework (checkout to b7340da4fbd1bde7d39a99e7379d1f2ce5e70965)
 	```bash
 	git clone https://github.com/deepmind/acme.git
 	pip install -e acme/

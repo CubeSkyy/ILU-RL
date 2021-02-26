@@ -16,6 +16,7 @@
 """DQN agent implementation."""
 
 import copy
+from typing import Optional
 
 from acme import datasets
 from acme import specs
@@ -65,6 +66,7 @@ class DQN(agent.Agent):
             epsilon_schedule_timesteps: int = 20000,
             learning_rate: float = 1e-3,
             discount: float = 0.99,
+            max_gradient_norm: Optional[float] = None,
             logger: loggers.Logger = None,
         ):
         """Initialize the agent.
@@ -83,8 +85,9 @@ class DQN(agent.Agent):
             ignored if a dataset argument is passed.
         max_replay_size: maximum replay size.
         importance_sampling_exponent: power to which importance weights are raised
-            before normalizing.
-        priority_exponent: exponent used in prioritized sampling.
+            before normalizing (beta). See https://arxiv.org/pdf/1710.02298.pdf
+        priority_exponent: exponent used in prioritized sampling (omega).
+            See https://arxiv.org/pdf/1710.02298.pdf
         n_step: number of steps to squash into a single transition.
         epsilon_init: Initial epsilon value (probability of taking a random action)
         epsilon_final: Final epsilon value (probability of taking a random action)
@@ -93,6 +96,7 @@ class DQN(agent.Agent):
         learning_rate: learning rate for the q-network update.
         discount: discount to use for TD updates.
         logger: logger object to be used by learner.
+        max_gradient_norm: used for gradient clipping.
         """
 
         # Create a replay server to add data to. This uses no limiter behavior in
@@ -147,6 +151,7 @@ class DQN(agent.Agent):
             target_update_period=target_update_period,
             dataset=dataset,
             replay_client=replay_client,
+            max_gradient_norm=max_gradient_norm,
             logger=logger,
             checkpoint=False)
 

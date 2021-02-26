@@ -2,7 +2,7 @@
 __author__ = 'Guilherme Varela'
 __date__ = '2020-01-30'
 import math
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 from collections import namedtuple
 
 import numpy as np
@@ -50,16 +50,8 @@ class MDPParams(Printable):
                 normalize_velocities: bool = True,
                 normalize_vehicles: bool = False,
                 discretize_state_space: bool = False,
-                category_counts: List[float] = [8.56, 13.00],
-                category_speeds: List[float] = [2.28, 5.50],
-                category_delays: List[float] = [5, 30],
-                category_queues: List[float] = [1, 10],
-                category_waiting_times: List[float] = [1, 10],
                 category_times: List[int] = [1, 10],
-                category_pressures: List[int] = [1, 10],
-                category_average_pressures: List[int] = [1, 10],
-                category_flows: List[int] = [1, 10],
-                category_speed_scores: List[int] = [1, 10],
+                categories: Dict[str, Dict[str, List[float]]] = {},
                 reward: str = 'reward_min_speed_delta',
                 reward_rescale: float = 1.0,
                 time_period: int = None,
@@ -89,11 +81,9 @@ class MDPParams(Printable):
         * discretize_state_space: bool
             if True the state space will be categorized (categories below).
 
-        * category_counts: List[float]
-        * category_speeds: List[float]
-        * category_delays: List[float]
-        * category_queues: List[float]
-        * (...)
+        * category_times: List[int]
+
+        * categoriess: Dict[str, Dict[str, List[float]]]
 
         * reward: str
             The reward function to be applied.
@@ -248,6 +238,7 @@ class DQNParams(Printable):
             epsilon_init: float = 1.0,
             epsilon_final: float = 0.01,
             epsilon_schedule_timesteps: int = 50000,
+            max_gradient_norm: float = None,
             torso_layers : list = [5],
             head_layers  : list = [5],
         ):
@@ -299,6 +290,9 @@ class DQNParams(Printable):
 
         * epsilon_schedule_timesteps: int
             Number of timesteps to decay epsilon from 'epsilon_init' to 'epsilon_final'.
+
+        * max_gradient_norm: float
+            Gradient clipping coefficient.
 
         * torso_layers: list
             Torso MLP network layers.

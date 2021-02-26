@@ -7,10 +7,11 @@ from ilurl.state.lane import Lane
 
 from ilurl.utils.properties import lazy_property
 
-COUNT_SET = {'average_pressure', 'count', 'speed_score', 'pressure'}
-
-def _check_count(labels):
-    return bool(COUNT_SET & set(labels))
+# This comes from someplace else
+# COUNT_SET = {'average_pressure', 'count', 'speed_score', 'pressure'}
+# 
+# def _check_count(labels):
+#     return bool(COUNT_SET & set(labels))
 
 def uniq(tl_state):
     """Unique that preservers order"""
@@ -18,6 +19,11 @@ def uniq(tl_state):
     ret = OrderedDict.fromkeys(ret)
     ret = [r for r in ret]
     return ret
+
+import numpy as np
+
+from ilurl.utils.properties import lazy_property
+from ilurl.state.lane import check_count
 
 class Phase(Node):
     """Represents a phase.
@@ -60,15 +66,15 @@ class Phase(Node):
         self._normalize_velocities = mdp_params.normalize_velocities
         self._normalize_vehicles = mdp_params.normalize_vehicles
         self._order = phase_order
-
         # 2) Get categorization bins.
-        # fn: extracts category_<feature_name>s from mdp_params
-        def fn(x):
-            z = self._get_derived(x)
-            return [getattr(mdp_params, y) for y in dir(mdp_params)
-                    if (z in y) and ('category_' in y)][0]
-        self._bins = {_feat: fn(_feat) for _feat in mdp_params.features}
-
+        # fn: extracts <feature_name> from mdp_params
+        self._bins = {}
+        if mdp_params.discretize_state_space:
+            binid = phase_id.split('#')[-1]
+            def fn(x):
+                dfeat = self._get_derived(x)
+                return [mdp_params.categories[dfeat][binid]][0]
+            self._bins = {_feat: fn(_feat) for _feat in mdp_params.features}
 
         # 3) Instantiate lanes
         lanes = {}
@@ -89,9 +95,8 @@ class Phase(Node):
         self.cached_features = {}
         self._phase_order = phase_order
         assert phase_order < 2
+        # 1) Define base class attributes
         super(Phase, self).__init__(intersection, phase_id, lanes)
-
-
     @property
     def phase_id(self):
         return self.node_id
@@ -227,7 +232,7 @@ class Phase(Node):
             _vehs = [v for v in vehs if _in(v, lane)]
             lane.update(_vehs)
 
-            step_count += lane.count if _check_count(self.labels) else 0
+            step_count += lane.count if check_count(self.labels) else 0
             step_delay += lane.delay if 'delay' in self.labels else 0
             step_flow = step_flow.union(lane.flow) if 'flow' in self.labels else 0
             step_queue = max(step_queue, lane.stopped_vehs) if 'queue' in self.labels else 0
@@ -309,7 +314,6 @@ class Phase(Node):
         # 3) Categorize each phase feature.
         if categorize:
             ret = [self._digitize(val, lbl) for val, lbl in zip(ret, sel)]
-
         return ret
 
     @property
@@ -489,7 +493,6 @@ class Phase(Node):
         * speed: float
             The average speed of all cars in the phase
         """
-
         speeds_counts = zip(self._cached_speed, self._cached_count)
         ret = []
         for speed, count in speeds_counts:
@@ -519,7 +522,7 @@ class Phase(Node):
         self._last_index = ind
 
     def _update_count(self, step_count, ind):
-        if _check_count(self.labels):
+        if check_count(self.labels):
             w = self._cached_weight[ind]
             self._cached_count[ind] = step_count + (w > 0) * self._cached_count[ind]
 

@@ -1,3 +1,4 @@
+from copy import deepcopy
 from ilurl.state.node import Node
 from ilurl.state.phase import Phase
 
@@ -41,9 +42,14 @@ class Intersection(Node):
         * state
             A state is an aggregate of features indexed by intersections' ids.
         """
+        # 1) Deepcopy categories
+        _mdp_params = deepcopy(mdp_params)
+        if _mdp_params.discretize_state_space:
+            _mdp_params.categories = _mdp_params.categories[tls_id]
+
         # 1) Define children nodes: Phase
         phases = {f'{tls_id}#{phase_id}': Phase(self,
-                                                mdp_params,
+                                                _mdp_params,
                                                 f'{tls_id}#{phase_id}',
                                                 phase_id,
                                                 phase_comp,

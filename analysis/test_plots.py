@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 from analysis.utils import str2bool, get_emissions, get_vehicles, get_throughput
+from ilurl.networks.base import Network
 
 plt.style.use('ggplot')
 
@@ -40,6 +41,30 @@ def print_arguments(args):
 
     print('Arguments (analysis/test_plots.py):')
     print('\tExperiment root folder: {0}\n'.format(args.experiment_root_folder))
+
+def get_lanes_lengths(train_args):
+
+    network_args = {
+        'network_id': train_args['network'],
+        'horizon': int(train_args['experiment_time']),
+        'demand_type': train_args['demand_type'],
+        'demand_mode': train_args['demand_mode'],
+        'tls_type': train_args['tls_type']
+    }
+    network = Network(**network_args)
+
+    lanes_lengths = {
+        (edge['id'], int(lane['index'])): float(lane['length'])
+        for edge in network.edges
+        for lane in sorted(edge['lanes'], key=lambda x: int(x['index']))
+    }
+    return lanes_lengths
+
+def get_length(row, lanes_lengths):
+    *edge, lid =  row['lane'].split('_')
+    eid = '_'.join(edge)
+    lid = int(lid)
+    return lanes_lengths.get((eid, lid), 0)
 
 def main(experiment_root_folder=None):
 
@@ -69,6 +94,7 @@ def main(experiment_root_folder=None):
     train_config_path = list(Path(experiment_root_folder).rglob('train.config'))[0]
     train_config = configparser.ConfigParser()
     train_config.read(train_config_path)
+
     agent_type = train_config['agent_type']['agent_type']
     demand_type = train_config['train_args']['demand_type']
 
@@ -78,12 +104,17 @@ def main(experiment_root_folder=None):
 
     mean_values_per_eval = []
 
+    lanes_lengths = get_lanes_lengths(train_config['train_args'])
+    def fn(x):
+        return get_length(x, lanes_lengths)
+
     for csv_file in csv_files:
 
         print('Processing CSV file: {0}'.format(csv_file))
-        
+
         # Load CSV data.
         df_csv = get_emissions(csv_file)
+        df_csv['length'] = df_csv.apply(fn, axis=1)
 
         df_per_vehicle = get_vehicles(df_csv)
 
@@ -103,12 +134,18 @@ def main(experiment_root_folder=None):
 
             mean_values_per_eval.append({'train_run': Path(csv_file).parts[-4],
                                         'speed': df_per_vehicle_mean['speed'],
+                                        'velocity': df_per_vehicle_mean['velocity'],
+                                        'stops': df_per_vehicle_mean['stops'],
                                         'waiting_time': df_per_vehicle_mean['waiting'],
                                         'travel_time': df_per_vehicle_mean['total'],
                                         'speed_congested': df_congested_period_mean['speed'],
+                                        'velocity_congested': df_congested_period_mean['velocity'],
+                                        'stops_congested': df_congested_period_mean['stops'],
                                         'waiting_time_congested': df_congested_period_mean['waiting'],
                                         'travel_time_congested': df_congested_period_mean['total'],
                                         'speed_free_flow': df_free_flow_period_mean['speed'],
+                                        'velocity_free_flow': df_free_flow_period_mean['velocity'],
+                                        'stops_free_flow': df_free_flow_period_mean['stops'],
                                         'waiting_time_free_flow': df_free_flow_period_mean['waiting'],
                                         'travel_time_free_flow': df_free_flow_period_mean['total'],
                                         'throughput': len(df_per_vehicle)})
@@ -116,6 +153,8 @@ def main(experiment_root_folder=None):
 
             mean_values_per_eval.append({'train_run': Path(csv_file).parts[-4],
                                         'speed': df_per_vehicle_mean['speed'],
+                                        'velocity': df_per_vehicle_mean['velocity'],
+                                        'stops': df_per_vehicle_mean['stops'],
                                         'waiting_time': df_per_vehicle_mean['waiting'],
                                         'travel_time': df_per_vehicle_mean['total'],
                                         'throughput': len(df_per_vehicle)})
@@ -136,11 +175,11 @@ def main(experiment_root_folder=None):
     # Write mean values per eval into a csv file.
     df_mean_metrics_per_eval = pd.DataFrame(mean_values_per_eval)
     if demand_type not in ('constant',):
-        cols = ["train_run", "speed", "waiting_time", "travel_time", "throughput",
-                "speed_congested", "waiting_time_congested", "travel_time_congested",
-                "speed_free_flow", "waiting_time_free_flow", "travel_time_free_flow"]
+        cols = ["train_run", "speed", "velocity", "stops", "waiting_time", "travel_time", "throughput",
+                "speed_congested", "velocity_congested", "stops_congested", "waiting_time_congested", "travel_time_congested",
+                "speed_free_flow", "velocity_free_flow", "stops_free_flow", "waiting_time_free_flow", "travel_time_free_flow"]
     else:
-        cols = ["train_run", "speed", "waiting_time",
+        cols = ["train_run", "speed", "velocity", "stops", "waiting_time",
                 "travel_time", "throughput"]
 
     df_mean_metrics_per_eval.to_csv('{0}/{1}_metrics.csv'.format(
@@ -253,6 +292,69 @@ def main(experiment_root_folder=None):
     plt.close()
 
     """
+        Velocity stats.
+    """
+    # Describe vehicles' velocity.
+    print('Velocity:')
+    df_stats = df_vehicles_appended['velocity'].describe()
+    df_stats.to_csv('{0}/velocity_stats.csv'.format(output_folder_path),
+                    float_format='%.3f', header=False)
+    print(df_stats)
+    print('\n')
+
+    # Histogram and KDE.
+    fig = plt.figure()
+    fig.set_size_inches(FIGURE_X, FIGURE_Y)
+
+    kde = stats.gaussian_kde(df_vehicles_appended['velocity'])
+    kde_x = np.linspace(df_vehicles_appended['velocity'].min(), df_vehicles_appended['velocity'].max(), 1000)
+    kde_y = kde(kde_x)
+    plt.plot(kde_x, kde_y, linewidth=3)
+
+    # Store data in dataframe for further materialization.
+    velocity_hist_kde = pd.DataFrame()
+    velocity_hist_kde['x'] = kde_x
+    velocity_hist_kde['y'] = kde_y
+
+    plt.xlabel('Speed (m/s)')
+    plt.ylabel('Density')
+
+    plt.savefig('{0}/velocity_hist.pdf'.format(output_folder_path), bbox_inches='tight', pad_inches=0)
+    plt.savefig('{0}/velocity_hist.png'.format(output_folder_path), bbox_inches='tight', pad_inches=0)
+    plt.close()
+
+    """
+        Stops stats.
+    """
+    # Describe the number of stops.
+    print('Stops:')
+    df_stats = df_vehicles_appended['stops'].describe()
+    df_stats.to_csv('{0}/stops_stats.csv'.format(output_folder_path),
+                    float_format='%.3f', header=False)
+    print(df_stats)
+    print('\n')
+
+    # Histogram and KDE.
+    fig = plt.figure()
+    fig.set_size_inches(FIGURE_X, FIGURE_Y)
+
+    counts = df_vehicles_appended['stops'].value_counts(normalize=True)
+
+    plt.bar(list(counts.index), counts.values)
+
+    # Store data in dataframe for further materialization.
+    stops_hist_kde = pd.DataFrame()
+    stops_hist_kde['x'] = list(counts.index)
+    stops_hist_kde['y'] = counts.values
+
+    plt.xlabel('Number of stops')
+    plt.ylabel('Density')
+
+    plt.savefig('{0}/stops_hist.pdf'.format(output_folder_path), bbox_inches='tight', pad_inches=0)
+    plt.savefig('{0}/stops_hist.png'.format(output_folder_path), bbox_inches='tight', pad_inches=0)
+    plt.close()
+
+    """
         Throughput stats.
         (For the entire rollout)
     """
@@ -262,7 +364,6 @@ def main(experiment_root_folder=None):
                     float_format='%.3f', header=False)
     print(df_stats)
     print('\n')
-
 
     if demand_type not in ('constant',):
 
@@ -370,6 +471,69 @@ def main(experiment_root_folder=None):
         plt.savefig('{0}/speeds_congested_hist.png'.format(output_folder_path), bbox_inches='tight', pad_inches=0)
         plt.close()
 
+        """
+            Velocity stats (congested).
+        """
+        # Describe vehicles' velocity.
+        print('Velocity (congested):')
+        df_stats = df_vehicles_appended_congested['velocity'].describe()
+        df_stats.to_csv('{0}/velocity_congested_stats.csv'.format(output_folder_path),
+                        float_format='%.3f', header=False)
+        print(df_stats)
+        print('\n')
+
+        # Histogram and KDE.
+        fig = plt.figure()
+        fig.set_size_inches(FIGURE_X, FIGURE_Y)
+
+        kde = stats.gaussian_kde(df_vehicles_appended_congested['velocity'])
+        kde_x = np.linspace(df_vehicles_appended_congested['velocity'].min(),
+                        df_vehicles_appended_congested['velocity'].max(), 1000)
+        kde_y = kde(kde_x)
+        plt.plot(kde_x, kde_y, linewidth=3)
+
+        # Store data in dataframe for further materialization.
+        velocity_congested_hist_kde = pd.DataFrame()
+        velocity_congested_hist_kde['x'] = kde_x
+        velocity_congested_hist_kde['y'] = kde_y
+
+        plt.xlabel('Speed (m/s)')
+        plt.ylabel('Density')
+
+        plt.savefig('{0}/velocity_congested_hist.pdf'.format(output_folder_path), bbox_inches='tight', pad_inches=0)
+        plt.savefig('{0}/velocity_congested_hist.png'.format(output_folder_path), bbox_inches='tight', pad_inches=0)
+        plt.close()
+
+        """
+            Stops stats (congested).
+        """
+        # Describe the number of stops.
+        print('Stops (congested):')
+        df_stats = df_vehicles_appended_congested['stops'].describe()
+        df_stats.to_csv('{0}/stops_congested_stats.csv'.format(output_folder_path),
+                        float_format='%.3f', header=False)
+        print(df_stats)
+        print('\n')
+
+        # Histogram and KDE.
+        fig = plt.figure()
+        fig.set_size_inches(FIGURE_X, FIGURE_Y)
+
+        counts = df_vehicles_appended_congested['stops'].value_counts(normalize=True)
+
+        plt.bar(list(counts.index), counts.values)
+
+        # Store data in dataframe for further materialization.
+        stops_congested_hist_kde = pd.DataFrame()
+        stops_congested_hist_kde['x'] = list(counts.index)
+        stops_congested_hist_kde['y'] = counts.values
+
+        plt.xlabel('Number of stops')
+        plt.ylabel('Density')
+
+        plt.savefig('{0}/stops_congested_hist.pdf'.format(output_folder_path), bbox_inches='tight', pad_inches=0)
+        plt.savefig('{0}/stops_congested_hist.png'.format(output_folder_path), bbox_inches='tight', pad_inches=0)
+        plt.close()
 
         print('-'*25)
         # Filter data by free-flow hour interval.
@@ -475,6 +639,69 @@ def main(experiment_root_folder=None):
         plt.savefig('{0}/speeds_free_flow_hist.png'.format(output_folder_path), bbox_inches='tight', pad_inches=0)
         plt.close()
 
+        """
+            Velocity stats (free-flow).
+        """
+        # Describe vehicles' velocity.
+        print('Velocity (free-flow):')
+        df_stats = df_vehicles_appended_free_flow['velocity'].describe()
+        df_stats.to_csv('{0}/velocity_free_flow_stats.csv'.format(output_folder_path),
+                        float_format='%.3f', header=False)
+        print(df_stats)
+        print('\n')
+
+        # Histogram and KDE.
+        fig = plt.figure()
+        fig.set_size_inches(FIGURE_X, FIGURE_Y)
+
+        kde = stats.gaussian_kde(df_vehicles_appended_free_flow['velocity'])
+        kde_x = np.linspace(df_vehicles_appended_free_flow['velocity'].min(),
+                        df_vehicles_appended_free_flow['velocity'].max(), 1000)
+        kde_y = kde(kde_x)
+        plt.plot(kde_x, kde_y, linewidth=3)
+
+        # Store data in dataframe for further materialization.
+        velocity_free_flow_hist_kde = pd.DataFrame()
+        velocity_free_flow_hist_kde['x'] = kde_x
+        velocity_free_flow_hist_kde['y'] = kde_y
+
+        plt.xlabel('Speed (m/s)')
+        plt.ylabel('Density')
+
+        plt.savefig('{0}/velocity_free_flow_hist.pdf'.format(output_folder_path), bbox_inches='tight', pad_inches=0)
+        plt.savefig('{0}/velocity_free_flow_hist.png'.format(output_folder_path), bbox_inches='tight', pad_inches=0)
+        plt.close()
+
+        """
+            Stops stats (free-flow).
+        """
+        # Describe the number of stops.
+        print('Stops (free-flow):')
+        df_stats = df_vehicles_appended_free_flow['stops'].describe()
+        df_stats.to_csv('{0}/stops_free_flow_stats.csv'.format(output_folder_path),
+                        float_format='%.3f', header=False)
+        print(df_stats)
+        print('\n')
+
+        # Histogram and KDE.
+        fig = plt.figure()
+        fig.set_size_inches(FIGURE_X, FIGURE_Y)
+
+        counts = df_vehicles_appended_free_flow['stops'].value_counts(normalize=True)
+
+        plt.bar(list(counts.index), counts.values)
+
+        # Store data in dataframe for further materialization.
+        stops_free_flow_hist_kde = pd.DataFrame()
+        stops_free_flow_hist_kde['x'] = list(counts.index)
+        stops_free_flow_hist_kde['y'] = counts.values
+
+        plt.xlabel('Number of stops')
+        plt.ylabel('Density')
+
+        plt.savefig('{0}/stops_free_flow_hist.pdf'.format(output_folder_path), bbox_inches='tight', pad_inches=0)
+        plt.savefig('{0}/stops_free_flow_hist.png'.format(output_folder_path), bbox_inches='tight', pad_inches=0)
+        plt.close()
 
     # Aggregate results per cycle.
     intervals = np.arange(0, df_vehicles_appended['finish'].max(), cycle_time)
@@ -642,9 +869,11 @@ def main(experiment_root_folder=None):
             plt.plot(df_actions[col], label=col) # .rolling(window=window_size).mean()
 
         plt.xlabel('Cycle')
-        plt.ylabel('Action (phase-0 allocation)')
+        plt.ylabel('Action (phase-1 allocation)')
         # plt.title('Actions per intersection')
         plt.legend()
+
+        plt.ylim(0.0,1.0)
 
         plt.savefig('{0}/actions_per_intersection.pdf'.format(output_folder_path), bbox_inches='tight', pad_inches=0)
         plt.savefig('{0}/actions_per_intersection.png'.format(output_folder_path), bbox_inches='tight', pad_inches=0)
@@ -670,6 +899,9 @@ def main(experiment_root_folder=None):
         plt.ylabel('Action')
         # plt.title('Actions per intersection')
         plt.legend()
+
+        plt.ylim(-0.2,6.2)
+        plt.yticks(ticks=[0,1,2,3,4,5,6], labels=['(30,70)', '(36,63)', '(43,57)', '(50,50)', '(57,43)', '(63,37)', '(70,30)'])
 
         plt.savefig('{0}/actions_per_intersection.pdf'.format(output_folder_path), bbox_inches='tight', pad_inches=0)
         plt.savefig('{0}/actions_per_intersection.png'.format(output_folder_path), bbox_inches='tight', pad_inches=0)
@@ -746,12 +978,18 @@ def main(experiment_root_folder=None):
         processed_data = pd.concat([waiting_time_hist_kde,
                                     travel_time_hist_kde,
                                     speed_hist_kde,
+                                    velocity_hist_kde,
+                                    stops_hist_kde,
                                     waiting_time_congested_hist_kde,
                                     travel_time_congested_hist_kde,
                                     speed_congested_hist_kde,
+                                    velocity_congested_hist_kde,
+                                    stops_congested_hist_kde,
                                     waiting_time_free_flow_hist_kde,
                                     travel_time_free_flow_hist_kde,
                                     speed_free_flow_hist_kde,
+                                    velocity_free_flow_hist_kde,
+                                    stops_free_flow_hist_kde,
                                     waiting_time_per_cycle,
                                     travel_time_per_cycle,
                                     throughput_per_cycle,
@@ -760,12 +998,18 @@ def main(experiment_root_folder=None):
                                     , keys=['waiting_time_hist_kde',
                                     'travel_time_hist_kde',
                                     'speed_hist_kde',
+                                    'velocity_hist_kde',
+                                    'stops_hist_kde',
                                     'waiting_time_congested_hist_kde',
                                     'travel_time_congested_hist_kde',
                                     'speed_congested_hist_kde',
+                                    'velocity_congested_hist_kde',
+                                    'stops_congested_hist_kde',
                                     'waiting_time_free_flow_hist_kde',
                                     'travel_time_free_flow_hist_kde',
                                     'speed_free_flow_hist_kde',
+                                    'velocity_free_flow_hist_kde',
+                                    'stops_free_flow_hist_kde',
                                     'waiting_time_per_cycle',
                                     'travel_time_per_cycle',
                                     'throughput_per_cycle',
@@ -776,6 +1020,8 @@ def main(experiment_root_folder=None):
         processed_data = pd.concat([waiting_time_hist_kde,
                                     travel_time_hist_kde,
                                     speed_hist_kde,
+                                    velocity_hist_kde,
+                                    stops_hist_kde,
                                     waiting_time_per_cycle,
                                     travel_time_per_cycle,
                                     throughput_per_cycle,
@@ -784,6 +1030,8 @@ def main(experiment_root_folder=None):
                                     , keys=['waiting_time_hist_kde',
                                     'travel_time_hist_kde',
                                     'speed_hist_kde',
+                                    'velocity_hist_kde',
+                                    'stops_hist_kde',
                                     'waiting_time_per_cycle',
                                     'travel_time_per_cycle',
                                     'throughput_per_cycle',

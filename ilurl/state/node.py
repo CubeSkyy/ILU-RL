@@ -58,4 +58,3 @@ class Node:
                 del path[-1]
             return found
 
-

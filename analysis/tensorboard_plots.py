@@ -25,7 +25,10 @@ def get_arguments():
             This script creates training losses plots, similar do what is displayed in tensorboard.
         """
     )
-    parser.add_argument('--experiment_root_folder', help='Experiment root folder.', required=True)
+    parser.add_argument('experiment_root_folder',
+                        type=str, nargs='?',
+                        help='Experiment root folder.')
+
     parser.add_argument('--num_samples', type=int, required=False,
                     help='Number of train runs to sample and plot.', default=5)
 
@@ -73,7 +76,7 @@ def main():
 
     for col in cols:
 
-        if col in ('steps', 'walltime', 'step'):
+        if col in ('steps', 'walltime', 'step', 'learner_steps', 'learner_walltime'):
             continue
 
         print(f'Creating plot for column "{col}":')

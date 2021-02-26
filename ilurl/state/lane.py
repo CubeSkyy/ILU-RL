@@ -1,17 +1,16 @@
 import numpy as np
-
 from ilurl.state.node import Node
+
+COUNT_SET = {'average_pressure', 'count', 'speed_score', 'pressure'}
+
+def check_count(labels):
+    return bool(COUNT_SET & set(labels))
 
 def delay(x):
     if x >= 1.0:
         return 0.0
     else:
         return np.exp(-5.0*x)
-
-COUNT_SET = {'average_pressure', 'count', 'speed_score', 'pressure'}
-
-def _check_count(labels):
-    return bool(COUNT_SET & set(labels))
 
 class Lane(Node):
     """ Represents a lane within an edge.
@@ -104,7 +103,7 @@ class Lane(Node):
 
     def _update_count(self, vehs):
         """Step update for count variable"""
-        if _check_count(self.labels):
+        if check_count(self.labels):
             self._cached_count = len(vehs)
 
     def _update_flows(self, vehs):

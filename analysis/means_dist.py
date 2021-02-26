@@ -1,8 +1,6 @@
 import os
 import tarfile
-import json
 import pandas as pd
-import numpy as np
 import argparse
 from pathlib import Path
 import configparser
@@ -12,13 +10,13 @@ import shutil
 import matplotlib
 matplotlib.use('agg')
 import matplotlib.pyplot as plt
+
 import seaborn as sns
+
 plt.style.use('ggplot')
 
-from scipy import stats
-import statsmodels
-from statsmodels.stats.multicomp import pairwise_tukeyhsd
-import scikit_posthocs as sp
+FIGURE_X = 6.0
+FIGURE_Y = 4.0
 
 def get_arguments():
     parser = argparse.ArgumentParser(
@@ -34,17 +32,20 @@ def get_arguments():
 
 def print_arguments(args):
 
-    print('Arguments (analysis/stat_test.py):')
+    print('Arguments (analysis/means_dist.py):')
     print('\tExperiments: {0}\n'.format(args.experiments_paths))
     print('\tExperiments labels: {0}\n'.format(args.labels))
 
 
-if __name__ == '__main__':
+def main():
 
-    print('\nRUNNING analysis/stat_test.py\n')
+    print('\nRUNNING analysis/means_dist.py\n')
 
     args = get_arguments()
     print_arguments(args)
+
+    # Prepare output folder.
+    os.makedirs('analysis/plots/means_dist/', exist_ok=True)
 
     # Open dataframes.
     dfs = []
@@ -94,29 +95,63 @@ if __name__ == '__main__':
     else:
         lbls = [Path(exp_path).name for exp_path in args.experiments_paths] # Default labels.
 
+    """
+        Waiting time.
+    """
+    fig = plt.figure()
 
-    # Shapiro tests.
-    print('Shapiro tests:')
-    for (df, lbl) in zip(dfs,lbls):
-        shapiro_test = stats.shapiro(df['travel_time'])
-        print(f'\t{lbl}: {shapiro_test}')
+    fig, ax = plt.subplots()
+    fig.set_size_inches(FIGURE_X, FIGURE_Y)
 
-    args = [df['travel_time'] for df in dfs]
-    print(f'\nLevene\'s test: {stats.levene(*args)}')
+    for df, lbl in zip(dfs, lbls):
+        sns.distplot(df['waiting_time'], hist=False, kde=True, norm_hist=True,
+                 kde_kws = {'linewidth': 3}, label=lbl)
 
-    print(f'\nANOVA test: {stats.f_oneway(*args)}')
+    plt.legend()
+    plt.xlabel('Waiting time (s)')
+    plt.ylabel('Density')
+    plt.savefig('analysis/plots/means_dist/waiting_time.png', bbox_inches='tight', pad_inches=0)
+    plt.savefig('analysis/plots/means_dist/waiting_time.pdf', bbox_inches='tight', pad_inches=0)
+    plt.close()
 
-    data = []
-    groups = []
-    for (df, lbl) in zip(dfs, lbls):
-        data.extend(df['travel_time'].tolist())
-        groups.extend([lbl for _ in range(len(df['travel_time'].tolist()))])
+    """
+        Travel time.
+    """
+    fig = plt.figure()
 
-    print('\nTukeyHSD:', pairwise_tukeyhsd(data, groups))
+    fig, ax = plt.subplots()
+    fig.set_size_inches(FIGURE_X, FIGURE_Y)
 
-    # Non-parametric test.
-    print('\nKruskal (non-parametric) test:', stats.kruskal(*args))
+    for df, lbl in zip(dfs, lbls):
+        sns.distplot(df['travel_time'], hist=False, kde=True, norm_hist=True,
+                 kde_kws = {'linewidth': 3}, label=lbl)
 
-    # Post-hoc non-parametric comparisons.
-    data = [df['travel_time'].tolist() for df in dfs]
-    print(sp.posthoc_conover(data, p_adjust = 'holm'))
+    plt.legend()
+    plt.xlabel('Travel time (s)')
+    plt.ylabel('Density')
+    plt.savefig('analysis/plots/means_dist/travel_time.png', bbox_inches='tight', pad_inches=0)
+    plt.savefig('analysis/plots/means_dist/travel_time.pdf', bbox_inches='tight', pad_inches=0)
+    plt.close()
+
+    """
+        Speed.
+    """
+    fig = plt.figure()
+
+    fig, ax = plt.subplots()
+    fig.set_size_inches(FIGURE_X, FIGURE_Y)
+
+    for df, lbl in zip(dfs, lbls):
+        sns.distplot(df['speed'], hist=False, kde=True, norm_hist=True,
+                 kde_kws = {'linewidth': 3}, label=lbl)
+
+    plt.legend()
+    plt.xlabel('Speed (m/s)')
+    plt.ylabel('Density')
+    plt.savefig('analysis/plots/means_dist/speed.png', bbox_inches='tight', pad_inches=0)
+    plt.savefig('analysis/plots/means_dist/speed.pdf', bbox_inches='tight', pad_inches=0)
+    plt.close()
+
+
+if __name__ == "__main__":
+    main()

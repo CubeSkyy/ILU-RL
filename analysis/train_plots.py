@@ -55,8 +55,7 @@ def get_arguments():
         """
     )
 
-    parser.add_argument('--path', '-p', type=str, nargs='?',
-                dest='experiment_root_folder', required=True,
+    parser.add_argument('path', type=str, nargs='?',
                 help='Path to the experiment root folder')
 
     return parser.parse_args()
@@ -68,7 +67,7 @@ def main(experiment_root_folder=None):
 
     if not experiment_root_folder:
         args = get_arguments()
-        experiment_root_folder = args.experiment_root_folder
+        experiment_root_folder = args.path
 
     print('Input files:')
     # Get all train_log.json files from experiment root folder.
@@ -275,7 +274,7 @@ def main(experiment_root_folder=None):
             plt.plot(df_actions[col].rolling(window=window_size).mean(), label=col)
 
         plt.xlabel('Cycle')
-        plt.ylabel('Action (Phase-0 allocation)')
+        plt.ylabel('Action (Phase-1 allocation)')
         # plt.title('Actions per intersection')
         plt.legend()
 
@@ -291,7 +290,7 @@ def main(experiment_root_folder=None):
             plt.plot(df_actions[col], label=col)
 
         plt.xlabel('Cycle')
-        plt.ylabel('Action (Phase-0 allocation)')
+        plt.ylabel('Action (Phase-1 allocation)')
         # plt.title('Actions per intersection')
         plt.legend()
 
@@ -316,6 +315,9 @@ def main(experiment_root_folder=None):
 
         for col in df_actions.columns:
             plt.plot(df_actions[col].rolling(window=window_size).mean(), label=col)
+
+        plt.ylim(-0.2,6.2)
+        plt.yticks(ticks=[0,1,2,3,4,5,6], labels=['(30,70)', '(36,63)', '(43,57)', '(50,50)', '(57,43)', '(63,37)', '(70,30)'])
 
         plt.xlabel('Cycle')
         plt.ylabel('Action')
