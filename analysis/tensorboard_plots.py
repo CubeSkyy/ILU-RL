@@ -54,7 +54,7 @@ def main(experiment_root_folder=None, num_samples=5):
         experiment_root_folder = args.experiment_root_folder
         num_samples = args.num_samples
 
-    experiment_names = list(p for p in Path(experiment_root_folder).rglob('*-learning.csv'))
+    experiment_names = list(p for p in Path(experiment_root_folder).rglob('*.csv'))
 
     if num_samples > len(experiment_names):
         num_samples = len(experiment_names)
@@ -77,9 +77,9 @@ def main(experiment_root_folder=None, num_samples=5):
     cols = pd.read_csv(experiment_names[0]).columns
 
     def get_float_from_tensor(teststring): # HACK.
-        t = teststring[10:]
-        t = t[:-26]
-        return float(t)
+        # t = teststring[10:]
+        # t = t[:-26]
+        return float(teststring)
 
     for col in cols:
 

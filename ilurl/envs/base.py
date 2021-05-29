@@ -57,11 +57,12 @@ class TrafficLightEnv(Env):
         self.ts_type = env_params.additional_params.get('tls_type')
 
         # Cycle time.
-        self.cycle_time = network.cycle_time
+        # self.cycle_time = network.cycle_time
 
         # TLS programs (discrete action space).
         if mdp_params.action_space == 'discrete':
-            self.programs = network.programs
+            # self.programs = network.programs
+            self.rl_actions = network.rl_actions
 
         # Keeps the internal value of sim step.
         self.sim_step = sim_params.sim_step
@@ -163,20 +164,20 @@ class TrafficLightEnv(Env):
             for tid, durations in self.network.tls_durations.items()
         }
 
-    def get_joined_actions(self):
-        dur = int(self.duration)
-        joined_action = []
-        action_index = self._current_rl_action()
-        if (dur == 0 and self.step_counter > 1):
-            # New cycle.
-            return [True]*len(self.tls_ids)
-
-        for tid in self.tls_ids:
-            curr_action = action_index % len(self.programs[tid])
-            joined_action.append(dur in self.programs[tid][curr_action])
-            action_index //= len(self.programs[tid])
-
-        return joined_action
+    # def get_joined_actions(self):
+    #     dur = int(self.duration)
+    #     joined_action = []
+    #     action_index = self._current_rl_action()
+    #     if (dur == 0 and self.step_counter > 1):
+    #         # New cycle.
+    #         return [True]*len(self.tls_ids)
+    #
+    #     for tid in self.tls_ids:
+    #         curr_action = action_index % len(self.programs[tid])
+    #         joined_action.append(dur in self.programs[tid][curr_action])
+    #         action_index //= len(self.programs[tid])
+    #
+    #     return joined_action
 
 
     def update_observation_space(self):
@@ -239,8 +240,8 @@ class TrafficLightEnv(Env):
             True;  duration == duration<state_k+1>
 
         """
-        ret = []
-        dur = int(self.duration)
+        # ret = []
+        # dur = int(self.duration)
 
         def fn(tid):
 
