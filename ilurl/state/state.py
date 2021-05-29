@@ -70,8 +70,9 @@ class State(Node):
 
         Params:
         -------
-            * duration: float
-                Number of time steps in seconds within a cycle.
+            * duration: dict[float]
+                A dictionary containing the number of time steps in seconds
+                within a cycle, for each of the intersections.
                 Assumption: min time_step 1 second.
                 Circular updates: 0.0, 1.0, 2.0, ..., 0.0, 1.0, ...
 
@@ -86,7 +87,7 @@ class State(Node):
 
         # 2) Broadcast update to intersections.
         for tls_id, tls in self.intersections.items():
-            tls.update(duration, vehs[tls_id], tls)
+            tls.update(duration[tls_id], vehs[tls_id], tls)
 
         # 3) Additional intersection commands
         for tls_id, tls in self.intersections.items():

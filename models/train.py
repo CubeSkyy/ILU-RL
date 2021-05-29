@@ -105,7 +105,6 @@ def main(train_config_path=None):
             exp_path=experiment_path.as_posix(),
             train=True,
             save_agent=train_args.experiment_save_agent,
-            save_agent_interval=train_args.experiment_save_agent_interval,
             tls_type=train_args.tls_type
     )
 

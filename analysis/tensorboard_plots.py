@@ -40,39 +40,46 @@ def print_arguments(args):
     print('\tExperiment root folder: {0}\n'.format(args.experiment_root_folder))
     print('\tNumber of samples: {0}\n'.format(args.num_samples))
 
-def main():
+def main(experiment_root_folder=None, num_samples=5):
 
     print('\nRUNNING analysis/tensorboard_plots.py\n')
 
-    args = get_arguments()
-    print_arguments(args)
+    if not experiment_root_folder:
+        args = get_arguments()
+        print_arguments(args)
 
-    if Path(args.experiment_root_folder).suffix == '.gz':
-        raise ValueError('Please uncompress folder first.')
+        if Path(args.experiment_root_folder).suffix == '.gz':
+            raise ValueError('Please uncompress folder first.')
 
-    experiment_names = list(p for p in Path(args.experiment_root_folder).rglob('*-learning.csv'))
+        experiment_root_folder = args.experiment_root_folder
+        num_samples = args.num_samples
 
-    if len(experiment_names) < args.num_samples:
-        raise ValueError('num_samples argument should be <= than the number of training runs.')
+    experiment_names = list(p for p in Path(experiment_root_folder).rglob('*-learning.csv'))
+
+    if num_samples > len(experiment_names):
+        num_samples = len(experiment_names)
+        print(f'Downsampled `num_samples` to {num_samples}.')
 
     # Create output directory.
-    OUTPUTS_FOLDER = args.experiment_root_folder + '/tensorboard_plots/'
+    OUTPUTS_FOLDER = experiment_root_folder + '/tensorboard_plots/'
     os.makedirs(OUTPUTS_FOLDER, exist_ok=True)
 
     # Get agent_type from config file.
-    config_path = list(c for c in Path(args.experiment_root_folder).rglob('train.config'))[0]
+    config_path = list(c for c in Path(experiment_root_folder).rglob('train.config'))[0]
     train_config = configparser.ConfigParser()
     train_config.read(config_path)
     agent_type = train_config['agent_type']['agent_type']
 
     # Randomly sample train runs.
-    experiment_names = random.sample(experiment_names, k=args.num_samples)
+    experiment_names = random.sample(experiment_names, k=num_samples)
 
     # Get columns names.
     cols = pd.read_csv(experiment_names[0]).columns
 
-    def get_float_from_tensor(teststring):
-        return float(re.findall("\d+\.\d+", teststring)[0]) # hack.
+    def get_float_from_tensor(teststring): # HACK.
+        t = teststring[10:]
+        t = t[:-26]
+        return float(t)
 
     for col in cols:
 
@@ -96,7 +103,7 @@ def main():
             else:
                 # Values are tensor as strings so we need to convert them to floats.
                 df[col] = df[col].apply(get_float_from_tensor)
-
+            
             plt.plot(df[col], label=f'Train sample {idx}')
 
         # plt.xlim(0,500)

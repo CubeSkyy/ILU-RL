@@ -17,7 +17,7 @@ from ilurl.utils.properties import lazy_property
 from ilurl.params import InFlows
 from ilurl.loaders.nets import (get_routes, get_edges, get_path,
                                 get_logic, get_connections, get_nodes,
-                                get_types, get_tls_custom)
+                                get_types, get_tls_custom, get_rl_actions)
 
 
 class Network(base.Network):
@@ -38,8 +38,10 @@ class Network(base.Network):
         self.network_id = network_id
 
         baseline = (tls_type == 'actuated')
-        self.cycle_time, self.programs = get_tls_custom(
-                                network_id, baseline=baseline)
+        # self.cycle_time, self.programs = get_tls_custom(
+        #                         network_id, baseline=baseline)
+
+        self.rl_actions = get_rl_actions(network_id)
 
         if initial_config is None:
             initial_config = InitialConfig(
@@ -78,7 +80,7 @@ class Network(base.Network):
                     prog['programID'] = int(prog.pop('programID')) + 1
                     tls_logic.add(node_id, **prog)
         else:
-            for tls_id, tls_args in self.programs.items():
+            for tls_id, tls_args in self.programs.items(): # TODO.
                 tls_logic.add(tls_id, **tls_args)
 
         super(Network, self).__init__(
@@ -425,14 +427,14 @@ class Network(base.Network):
     @lazy_property
     def num_signal_plans_per_tls(self):
         """Dict containing the number of signal plans available
-        at 'programs' per traffic light.
+        at 'rl_actions' per traffic light.
 
         Returns
         -------
             * num_signal_plans_per_tls: dict
 
         """
-        return {tid: len(self.programs[tid]) for tid in self.tls_ids}
+        return {tid: len(self.rl_actions[tid]) for tid in self.tls_ids}
 
     @lazy_property
     def veh_length(self):

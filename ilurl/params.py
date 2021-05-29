@@ -461,7 +461,6 @@ class TrainParams(Printable):
             network: str = 'intersection',
             experiment_time: int = 900000,
             experiment_save_agent: bool = False,
-            experiment_save_agent_interval: int = 2500,
             experiment_seed=None,
             sumo_render: bool = False,
             sumo_emission: bool = False,
@@ -481,11 +480,7 @@ class TrainParams(Printable):
 
         * experiment_save_agent: bool
             Whether to save RL-agent parameters (checkpoints)
-            throughout training.
-
-        * experiment_save_agent_interval: int
-            [Only applies if experiment_save_agent is True]
-            Save agent interval (in agent update steps).
+            at the end of training.
 
         * experiment_seed: int or None
             Sets seed value for both RL agent and SUMO.
@@ -516,11 +511,6 @@ class TrainParams(Printable):
             raise ValueError(f'''
                 The ineq 0 < experiment_time must hold.
                 Got experiment_time = {experiment_time}.''')
-
-        if experiment_save_agent_interval <= 0:
-            raise ValueError(f'''
-            The ineq 0 < experiment_save_agent_interval < 1 must hold.
-            Got experiment_save_agent_interval = {experiment_save_agent_interval}.''')
 
         if tls_type not in TLS_TYPES:
             raise ValueError(f'''

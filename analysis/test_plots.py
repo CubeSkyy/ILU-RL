@@ -84,7 +84,6 @@ def main(experiment_root_folder=None):
     config_files = list(Path(experiment_root_folder).rglob('tls_config.json'))
     with config_files[0].open('r') as f:
         json_file = json.load(f)
-    cycle_time = json_file['rl']['cycle_time']
 
     # Get all *.csv files from experiment root folder.
     csv_files = [str(p) for p in list(Path(experiment_root_folder).rglob('*-emission.csv'))]
@@ -703,18 +702,18 @@ def main(experiment_root_folder=None):
         plt.savefig('{0}/stops_free_flow_hist.png'.format(output_folder_path), bbox_inches='tight', pad_inches=0)
         plt.close()
 
-    # Aggregate results per cycle.
-    intervals = np.arange(0, df_vehicles_appended['finish'].max(), cycle_time)
+    # Aggregate results per 5 minute (=300 seconds) intervals.
+    intervals = np.arange(0, df_vehicles_appended['finish'].max(), 300)
     df_per_cycle = df_vehicles_appended.groupby(pd.cut(df_vehicles_appended["finish"], intervals)).mean()
 
     """
-        Waiting time per cycle.
+        Waiting time throughout the simulation.
     """
     fig = plt.figure()
     fig.set_size_inches(FIGURE_X, FIGURE_Y)
 
     Y = df_per_cycle['waiting'].values
-    X = np.linspace(1, len(Y), len(Y))
+    X = np.linspace(1, len(Y), len(Y)) * 300
 
     # Store data in dataframe for further materialization.
     waiting_time_per_cycle = pd.DataFrame()
@@ -723,7 +722,7 @@ def main(experiment_root_folder=None):
 
     plt.plot(X,Y)
 
-    plt.xlabel('Cycle')
+    plt.xlabel('Simulation time (Seconds)')
     plt.ylabel('Average waiting time (s)')
     # plt.title('Waiting time')
     plt.savefig('{0}/waiting_time.pdf'.format(output_folder_path), bbox_inches='tight', pad_inches=0)
@@ -731,13 +730,13 @@ def main(experiment_root_folder=None):
     plt.close()
 
     """
-        Travel time per cycle.
+        Travel time throughout the simulation.
     """
     fig = plt.figure()
     fig.set_size_inches(FIGURE_X, FIGURE_Y)
 
     Y = df_per_cycle['total'].values
-    X = np.linspace(1, len(Y), len(Y))
+    X = np.linspace(1, len(Y), len(Y)) * 300
 
     # Store data in dataframe for further materialization.
     travel_time_per_cycle = pd.DataFrame()
@@ -746,7 +745,7 @@ def main(experiment_root_folder=None):
 
     plt.plot(X,Y)
 
-    plt.xlabel('Cycle')
+    plt.xlabel('Simulation time (Seconds)')
     plt.ylabel('Average travel time (s)')
     # plt.title('Travel time')
     plt.savefig('{0}/travel_time.pdf'.format(output_folder_path), bbox_inches='tight', pad_inches=0)
@@ -754,17 +753,17 @@ def main(experiment_root_folder=None):
     plt.close()
 
     """
-        Throughput per cycle.
+        Throughput throughout the simulation.
     """
     # Throughput per cycle.
     fig = plt.figure()
     fig.set_size_inches(FIGURE_X, FIGURE_Y)
 
-    intervals = np.arange(0, df_throughputs_appended['time'].max(), cycle_time)
+    intervals = np.arange(0, df_throughputs_appended['time'].max(), 300)
     df = df_throughputs_appended.groupby(pd.cut(df_throughputs_appended["time"], intervals)).count()
 
     Y = df['time'].values
-    X = np.linspace(1, len(Y), len(Y))
+    X = np.linspace(1, len(Y), len(Y)) * 300
 
     # Store data in dataframe for further materialization.
     throughput_per_cycle = pd.DataFrame()
@@ -773,7 +772,7 @@ def main(experiment_root_folder=None):
 
     plt.plot(X,Y)
 
-    plt.xlabel('Cycle')
+    plt.xlabel('Simulation time (Seconds)')
     plt.ylabel('Number of vehicles')
     # plt.title('Throughput')
 
@@ -793,9 +792,9 @@ def main(experiment_root_folder=None):
     id = str(json_data['id'][0])
 
     """
-        Rewards per intersection (per cycle).
+        Rewards per intersection (per decision step).
     """
-    dfs_r = [pd.DataFrame(r) for r in json_data['rewards'][id]]
+    dfs_r = [pd.DataFrame(dict([(k,pd.Series(v)) for k,v in r.items()])) for r in json_data['rewards'][id]]
 
     df_concat = pd.concat(dfs_r)
 
@@ -805,10 +804,12 @@ def main(experiment_root_folder=None):
     fig = plt.figure()
     fig.set_size_inches(FIGURE_X, FIGURE_Y)
 
-    for col in df_rewards.columns:
-        plt.plot(df_rewards[col].rolling(window=40).mean(), label=col)
+    window_size = min(len(df_rewards)-1, 40)
 
-    plt.xlabel('Cycle')
+    for col in df_rewards.columns:
+        plt.plot(df_rewards[col].rolling(window=window_size).mean(), label=col)
+
+    plt.xlabel('Decision step')
     plt.ylabel('Reward')
     # plt.title('Rewards per intersection')
     plt.legend()
@@ -819,30 +820,30 @@ def main(experiment_root_folder=None):
     plt.close()
 
     """
-        Total rewards (per cycle).
+        Total rewards (per decision step).
     """
-    fig = plt.figure()
+    """ fig = plt.figure()
     fig.set_size_inches(FIGURE_X, FIGURE_Y) 
 
     plt.plot(df_rewards.sum(axis=1))
 
-    plt.xlabel('Cycle')
+    plt.xlabel('Decision step')
     plt.ylabel('Reward')
     # plt.title('Cumulative reward')
 
     plt.savefig('{0}/total_reward.pdf'.format(output_folder_path), bbox_inches='tight', pad_inches=0)
     plt.savefig('{0}/total_reward.png'.format(output_folder_path), bbox_inches='tight', pad_inches=0)
     
-    plt.close()
+    plt.close() """
 
-    total_reward = df_rewards.to_numpy().sum()
+    """ total_reward = df_rewards.to_numpy().sum()
 
     # Describe total system cumulative reward.
     pd.DataFrame([total_reward]).to_csv('{0}/cumulative_reward.csv'.format(output_folder_path),
-                    float_format='%.3f', header=False)
+                    float_format='%.3f', header=False) """
 
     """
-        Actions per intersection (per cycle).
+        Actions per intersection (per decision step).
 
         WARNING: This might require different processing here. As an example,
             the actions taken by the DQN actions (discrete action agent)
@@ -881,8 +882,9 @@ def main(experiment_root_folder=None):
         plt.close()
 
     else:
-        # Discrete action-schema.
-        dfs_a = [pd.DataFrame(run) for run in json_data['actions'][id]]
+
+        # Discrete action-schema (non-smoothed).
+        dfs_a = [pd.DataFrame(dict([(k,pd.Series(v)) for k,v in run.items()])) for run in json_data['actions'][id]]
 
         df_concat = pd.concat(dfs_a)
 
@@ -901,27 +903,49 @@ def main(experiment_root_folder=None):
         by_row_index = df_concat.groupby(df_concat.index)
         df_actions = by_row_index.mean()
 
+        df_np = df_actions.to_numpy()
+        max_action = np.nanmax(df_np)
+
         fig = plt.figure()
         fig.set_size_inches(FIGURE_X, FIGURE_Y)
 
         for col in df_actions.columns:
-            plt.plot(df_actions[col].rolling(window=40).mean(), label=col)
+            plt.plot(df_actions[col], label=col)
 
-        plt.xlabel('Cycle')
+        plt.xlabel('Decision step')
         plt.ylabel('Action')
         # plt.title('Actions per intersection')
         plt.legend()
 
-        plt.ylim(-0.2,6.2)
-        plt.yticks(ticks=[0,1,2,3,4,5,6], labels=['(30,70)', '(36,63)', '(43,57)', '(50,50)', '(57,43)', '(63,37)', '(70,30)'])
+        plt.ylim(-0.2,max_action+0.5)
 
         plt.savefig('{0}/actions_per_intersection.pdf'.format(output_folder_path), bbox_inches='tight', pad_inches=0)
         plt.savefig('{0}/actions_per_intersection.png'.format(output_folder_path), bbox_inches='tight', pad_inches=0)
 
         plt.close()
 
+        fig = plt.figure()
+        fig.set_size_inches(FIGURE_X, FIGURE_Y)
+
+        window_size = min(len(df_actions)-1, 40)
+
+        for col in df_actions.columns:
+            plt.plot(df_actions[col].rolling(window=window_size).mean(), label=col)
+
+        plt.xlabel('Decision step')
+        plt.ylabel('Action')
+        # plt.title('Actions per intersection')
+        plt.legend()
+
+        plt.ylim(-0.2,max_action+0.5)
+
+        plt.savefig('{0}/actions_per_intersection_smoothed.pdf'.format(output_folder_path), bbox_inches='tight', pad_inches=0)
+        plt.savefig('{0}/actions_per_intersection_smoothed.png'.format(output_folder_path), bbox_inches='tight', pad_inches=0)
+
+        plt.close()
+
     """
-        Number of vehicles per cycle.
+        Number of vehicles throughout the simulation.
     """
     fig = plt.figure()
     fig.set_size_inches(FIGURE_X, FIGURE_Y)
@@ -933,7 +957,7 @@ def main(experiment_root_folder=None):
     by_row_index = df_concat.groupby(df_concat.index)
     df_vehicles = by_row_index.mean()
     
-    X = np.arange(0, len(df_vehicles))
+    X = np.arange(0, len(df_vehicles)) * 300
     Y = df_vehicles
 
     # Store data in dataframe for further materialization.
@@ -943,7 +967,7 @@ def main(experiment_root_folder=None):
 
     plt.plot(X,Y)
 
-    plt.xlabel('Cycle')
+    plt.xlabel('Simulation time (Seconds)')
     plt.ylabel('Number of vehicles')
     # plt.title('Number of vehicles')
 
@@ -953,7 +977,7 @@ def main(experiment_root_folder=None):
     plt.close()
 
     """
-        Average vehicles' velocity per cycle.
+        Average vehicles' velocity throughout the simulation.
     """
     fig = plt.figure()
     fig.set_size_inches(FIGURE_X, FIGURE_Y)
@@ -965,7 +989,7 @@ def main(experiment_root_folder=None):
     by_row_index = df_concat.groupby(df_concat.index)
     df_velocities = by_row_index.mean()
 
-    X = np.arange(0, len(df_velocities))
+    X = np.arange(0, len(df_velocities)) * 300
     Y = df_velocities
 
     # Store data in dataframe for further materialization.
@@ -975,7 +999,7 @@ def main(experiment_root_folder=None):
 
     plt.plot(X,Y)
 
-    plt.xlabel('Cycle')
+    plt.xlabel('Simulation time (Seconds)')
     plt.ylabel('Average velocity (m/s)')
     # plt.title('Vehicles\' velocities')
 

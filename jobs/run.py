@@ -44,6 +44,7 @@ from jobs.convert2csv import xml2csv
 from analysis.train_plots import main as train_plots
 from analysis.rollouts import main as rollouts_plots
 from analysis.test_plots import main as test_plots
+from analysis.tensorboard_plots import main as tb_plots
 
 from ilurl.utils.decorators import safe_run
 
@@ -58,7 +59,9 @@ train_plots = safe_run(train_plots, error_message=_ERROR_MESSAGE_TRAIN)
 rollouts_plots = safe_run(rollouts_plots, error_message=_ERROR_MESSAGE_ROLLOUTS)
 test_plots = safe_run(test_plots, error_message=_ERROR_MESSAGE_TEST)
 
+
 if __name__ == '__main__':
+
 
     # 0) Makes discretization bins
     categories = preprocess()
@@ -70,6 +73,7 @@ if __name__ == '__main__':
 
     # 2) Create train plots.
     train_plots(experiment_root_path)
+    tb_plots(experiment_root_path)
 
     # 3) Execute rollouts.
     # eval_path = rollouts(experiment_dir=experiment_root_path)

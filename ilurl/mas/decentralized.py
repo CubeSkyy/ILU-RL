@@ -92,23 +92,24 @@ class DecentralizedMAS(MASInterface):
 
     def act(self, state):
         # Send requests.
-        for (tid, agent) in self.agents.items():
-            agent.act(state[tid])
+        for tid in state.keys():
+            self.agents[tid].act(state[tid])
 
         # Retrieve requests.
-        choices = {tid: agent.receive()
-                    for (tid, agent) in self.agents.items()}
+        choices = {tid: self.agents[tid].receive()
+                    for tid in state.keys()}
 
         return choices
 
     def update(self, s, a, r, s1):
         # Send requests.
-        for (tid, agent) in self.agents.items():
-            agent.update(s[tid], a[tid], r[tid], s1[tid])
+        for tid in s.keys():
+            self.agents[tid].update(s[tid], a[tid],
+                                    r[tid], s1[tid])
 
         # Synchronize.
-        for (tid, agent) in self.agents.items():
-            agent.receive()
+        for tid in s.keys():
+            self.agents[tid].receive()
 
     def save_checkpoint(self, path):
         # Send requests.
@@ -119,10 +120,10 @@ class DecentralizedMAS(MASInterface):
         for (tid, agent) in self.agents.items():
             agent.receive()
 
-    def load_checkpoint(self, chkpts_dir_path, chkpt_num):
+    def load_checkpoint(self, chkpts_dir_path):
         # Send requests.
         for (tid, agent) in self.agents.items():
-            agent.load_checkpoint(chkpts_dir_path, chkpt_num)
+            agent.load_checkpoint(chkpts_dir_path)
 
         # Synchronize.
         for (tid, agent) in self.agents.items():
