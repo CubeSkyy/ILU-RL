@@ -183,6 +183,10 @@ class Experiment:
         info_dict["actions"] = action_to_double_precision([a for a in self.env.actions_log.values()])
         info_dict["states"] = [s for s in self.env.states_log.values()]
 
+        # Save final agents.
+        if self.save_agent and self.tls_type == 'rl' or self.tls_type == 'centralized':
+            self.env.tsc.save_checkpoint(self.exp_path)
+
         if self.tls_type not in ('static', 'actuated'):
             self.env.tsc.terminate()
         self.env.terminate()

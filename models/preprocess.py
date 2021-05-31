@@ -98,6 +98,7 @@ def main(preprocess_config_path=None):
             train=True,
             exp_path=None,
             save_agent=preprocess_args.experiment_save_agent,
+            save_agent_interval=preprocess_args.experiment_save_agent_interval,
             tls_type=preprocess_args.tls_type
     )
 

@@ -189,15 +189,16 @@ class R2D2(AgentWorker,AgentInterface):
         self.agent.tear_down()
 
     def save_checkpoint(self, path):
-        checkpoint_file = "{0}/checkpoints/{1}.chkpt".format(
+        checkpoint_file = "{0}/checkpoints/{1}/{2}.chkpt".format(
             path, self._obs_counter, self._name)
 
         print(f'Saved chkpt: {checkpoint_file}')
 
         self.agent.save(checkpoint_file)
 
-    def load_checkpoint(self, chkpts_dir_path):
-        chkpt_path = '{0}/{1}.chkpt'.format(chkpts_dir_path,
+    def load_checkpoint(self, chkpts_dir_path, chkpt_num):
+        chkpt_path = '{0}/{1}/{2}.chkpt'.format(chkpts_dir_path,
+                                                    chkpt_num,
                                                     self._name)
 
         print(f'Loaded chkpt: {chkpt_path}')

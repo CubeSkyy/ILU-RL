@@ -43,6 +43,9 @@ def get_arguments(config_file_path):
     parser.add_argument('--run-path', '-p', dest='run_path' , type=str, nargs='?',
                         help='Train run name to use for evaluation.')
 
+    parser.add_argument('--chkpt-number', '-n', dest='chkpt_number', type=int,
+                        nargs='?', required=True, help='Checkpoint number.')
+
     parser.add_argument('--rollout-time', '-t', dest='rollout_time', type=int,
                         default=86400, nargs='?',
                         help='Experiment runtime to perform evaluation.')
@@ -94,6 +97,7 @@ def print_arguments(args):
     print('\nArguments (rollout.py):')
     print('----------------------')
     print('Run path: {0}'.format(args.run_path))
+    print('Checkpoint number: {0}'.format(args.chkpt_number))
     print('Experiment time: {0}'.format(args.rollout_time))
     print('SUMO emission: {0}'.format(args.sumo_emission))
     print('SUMO render: {0}'.format(args.sumo_render))
@@ -171,7 +175,7 @@ def main(config_file_path=None):
 
     # Setup checkpoints.
     checkpoints_dir_path = Path(args.run_path) / 'checkpoints'
-    env.tsc.load_checkpoint(checkpoints_dir_path)
+    env.tsc.load_checkpoint(checkpoints_dir_path, args.chkpt_number)
 
     # Stop training.
     env.stop = True
@@ -185,6 +189,7 @@ def main(config_file_path=None):
 
     # Run the experiment.
     info_dict = exp.run(args.rollout_time)
+    info_dict['id'] = args.chkpt_number
 
     return info_dict
 

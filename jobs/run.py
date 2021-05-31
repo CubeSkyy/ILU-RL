@@ -73,7 +73,7 @@ if __name__ == '__main__':
 
     # 2) Create train plots.
     train_plots(experiment_root_path)
-    tb_plots(experiment_root_path)
+    #tb_plots(experiment_root_path)
 
     # 3) Execute rollouts.
     # eval_path = rollouts(experiment_dir=experiment_root_path)

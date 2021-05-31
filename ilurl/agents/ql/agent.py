@@ -188,8 +188,8 @@ class QL(AgentWorker, AgentInterface):
     def save_checkpoint(self, path):
         os.makedirs(f"{path}/checkpoints/{self._obs_counter}", exist_ok=True)
 
-        checkpoint_file = "{0}/checkpoints/{1}.chkpt".format(
-            path, self._name)
+        checkpoint_file = "{0}/checkpoints/{1}/{2}.chkpt".format(
+            path, self._obs_counter, self._name)
 
         print(f'Saved chkpt: {checkpoint_file}')
 
@@ -197,8 +197,9 @@ class QL(AgentWorker, AgentInterface):
             t = Thread(target=pickle.dump(self.Q, f))
             t.start()
 
-    def load_checkpoint(self, chkpts_dir_path):
-        chkpt_path = '{0}/{1}.chkpt'.format(chkpts_dir_path,
+    def load_checkpoint(self, chkpts_dir_path, chkpt_num):
+        chkpt_path = '{0}/{1}/{2}.chkpt'.format(chkpts_dir_path,
+                                                    chkpt_num,
                                                     self._name)
 
         print(f'Loaded chkpt: {chkpt_path}')

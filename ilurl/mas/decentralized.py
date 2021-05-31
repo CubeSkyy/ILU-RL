@@ -5,7 +5,7 @@ from ilurl.loaders.parser import config_parser
 from ilurl.agents.client import AgentClient
 from ilurl.agents.factory import AgentFactory
 from ilurl.interfaces.mas import MASInterface
-
+from pathlib import Path
 
 class DecentralizedMAS(MASInterface):
     """
@@ -120,10 +120,12 @@ class DecentralizedMAS(MASInterface):
         for (tid, agent) in self.agents.items():
             agent.receive()
 
-    def load_checkpoint(self, chkpts_dir_path):
+    def load_checkpoint(self, chkpts_dir_path, chkpt_num):
         # Send requests.
         for (tid, agent) in self.agents.items():
-            agent.load_checkpoint(chkpts_dir_path)
+            path = list(Path(chkpts_dir_path).rglob(tid + ".chkpt.*"))[0]
+            chkpt_num = str(path).split("/")[-2]
+            agent.load_checkpoint(chkpts_dir_path, chkpt_num)
 
         # Synchronize.
         for (tid, agent) in self.agents.items():

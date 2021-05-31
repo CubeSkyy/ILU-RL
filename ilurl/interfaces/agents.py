@@ -63,7 +63,7 @@ class AgentInterface(abc.ABC):
         """
 
     @abc.abstractmethod
-    def load_checkpoint(self, chkpts_dir_path):
+    def load_checkpoint(self, chkpts_dir_path, chkpt_num):
         """ Loads models' weights from files.
  
             Parameters:
@@ -71,4 +71,6 @@ class AgentInterface(abc.ABC):
             * chkpts_dir_path: str
                 path to checkpoints' directory.
 
+            * chkpt_num: int
+                the number of the checkpoints to load.
         """

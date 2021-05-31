@@ -21,7 +21,7 @@ class MASInterface(abc.ABC):
         """ Save checkpoint. """
 
     @abc.abstractmethod
-    def load_checkpoint(self, chkpts_dir_path):
+    def load_checkpoint(self, chkpts_dir_path, chkpt_num):
         """ Load checkpoint. """
 
     @abc.abstractmethod

@@ -86,7 +86,6 @@ def main(experiment_root_folder=None):
 
     actions = []
     rewards = []
-    rewards_2 = []
     vehicles = []
     velocities = []
 
@@ -99,65 +98,42 @@ def main(experiment_root_folder=None):
         with open(run_name) as f:
             json_data = json.load(f)
 
-        # Rewards per time-step.
-        r = json_data['rewards']
-        r = pd.DataFrame(r)
-        rewards.append(np.sum(r.values, axis=1))
-
-        rewards_2.append(json_data['rewards'])
-
-        # Number of vehicles per time-step.
+        rewards.append(json_data['rewards'])
         vehicles.append(json_data['vehicles'])
-
-        # Vehicles' velocity per time-step.
         velocities.append(json_data['velocities'])
-
-        # Agent's actions.
         actions.append(json_data['actions'])
-
-    """
-        Rewards per cycle.
-        (GLOBAL: sum of the reward for all intersections).
-    """
-    rewards = np.array(rewards)
-
-    fig = plt.figure()
-    fig.set_size_inches(FIGURE_X, FIGURE_Y)
-
-    Y = np.average(rewards, axis=0)
-    Y_std = np.std(rewards, axis=0)
-    X = np.linspace(1, rewards.shape[1], rewards.shape[1])
-
-    lowess = sm.nonparametric.lowess(Y, X, frac=0.10)
-
-    plt.plot(X,Y, label='Mean', c=MEAN_CURVE_COLOR)
-    plt.plot(X,lowess[:,1], c=SMOOTHING_CURVE_COLOR, label='Smoothing')
-
-    if rewards.shape[0] > 1:
-        plt.fill_between(X, Y-Y_std, Y+Y_std, color=STD_CURVE_COLOR, label='Std')
-
-    plt.xlabel('Cycle')
-    plt.ylabel('Reward')
-    # plt.title('Train rewards ({0} runs)'.format(len(train_files)))
-    plt.legend(loc=4)
-
-    file_name = '{0}/rewards.pdf'.format(output_folder_path)
-    plt.savefig(file_name, bbox_inches='tight', pad_inches=0)
-    file_name = '{0}/rewards.png'.format(output_folder_path)
-    plt.savefig(file_name, bbox_inches='tight', pad_inches=0)
-
-    plt.close()
 
     """
         Rewards per intersection.
     """
-    dfs_rewards = [pd.DataFrame(r) for r in rewards_2]
+    dfs_rewards = [pd.DataFrame(dict([(k,pd.Series(v)) for k,v in r.items()])) for r in rewards]
 
     df_concat = pd.concat(dfs_rewards)
 
     by_row_index = df_concat.groupby(df_concat.index)
     df_rewards = by_row_index.mean()
+    df_rewards_std = by_row_index.std()
 
+    fig = plt.figure()
+    fig.set_size_inches(FIGURE_X, FIGURE_Y)
+
+    for col in df_rewards.columns:
+
+        X = np.linspace(1, len(df_rewards[col]), len(df_rewards[col]))
+        plt.plot(X, df_rewards[col], label=f'{col}')
+        #plt.fill_between(X, df_rewards[col]-df_rewards_std[col], df_rewards[col]+df_rewards_std[col], color=STD_CURVE_COLOR, label=f'Std {col}')
+
+    plt.xlabel('Decision step')
+    plt.ylabel('Reward')
+
+    plt.legend()
+
+    plt.savefig('{0}/rewards_per_intersection.pdf'.format(output_folder_path), bbox_inches='tight', pad_inches=0)
+    plt.savefig('{0}/rewards_per_intersection.png'.format(output_folder_path), bbox_inches='tight', pad_inches=0)
+
+    """
+        Rewards per intersection (smoothed).
+    """
     fig = plt.figure()
     fig.set_size_inches(FIGURE_X, FIGURE_Y)
 
@@ -166,15 +142,15 @@ def main(experiment_root_folder=None):
     for col in df_rewards.columns:
         plt.plot(df_rewards[col].rolling(window=window_size).mean(), label=col)
 
-    plt.xlabel('Cycle')
+    plt.xlabel('Decision step')
     plt.ylabel('Reward')
-    # plt.title('Rewards per intersection')
+
     plt.legend()
 
-    plt.savefig('{0}/rewards_per_intersection.pdf'.format(output_folder_path), bbox_inches='tight', pad_inches=0)
-    plt.savefig('{0}/rewards_per_intersection.png'.format(output_folder_path), bbox_inches='tight', pad_inches=0)
+    plt.savefig('{0}/rewards_per_intersection_smoothed.pdf'.format(output_folder_path), bbox_inches='tight', pad_inches=0)
+    plt.savefig('{0}/rewards_per_intersection_smoothed.png'.format(output_folder_path), bbox_inches='tight', pad_inches=0)
 
-    """
+    """ 
         Number of vehicles per cycle.
         (GLOBAL: For all vehicles in simulation)
     """
@@ -186,6 +162,7 @@ def main(experiment_root_folder=None):
     Y = np.average(vehicles, axis=0)
     Y_std = np.std(vehicles, axis=0)
     X = np.linspace(1, vehicles.shape[1], vehicles.shape[1])
+    X = X * 300 # (data is stored every 300 s = 5 minutes)
 
     lowess = sm.nonparametric.lowess(Y, X, frac=0.10)
 
@@ -195,7 +172,7 @@ def main(experiment_root_folder=None):
     if vehicles.shape[0] > 1:
         plt.fill_between(X, Y-Y_std, Y+Y_std, color=STD_CURVE_COLOR, label='Std')
 
-    plt.xlabel('Cycle')
+    plt.xlabel('Simulation time')
     plt.ylabel('Number of vehicles')
     # plt.title('Number of vehicles ({0} runs)'.format(len(train_files)))
     plt.legend(loc=4)
@@ -207,7 +184,7 @@ def main(experiment_root_folder=None):
 
     plt.close()
 
-    """
+    """ 
         Vehicles' velocity per cycle.
         (GLOBAL: For all vehicles in simulation)
     """
@@ -219,6 +196,7 @@ def main(experiment_root_folder=None):
     Y = np.average(velocities, axis=0)
     Y_std = np.std(velocities, axis=0)
     X = np.linspace(1, velocities.shape[1], velocities.shape[1])
+    X = X * 300 # (data is stored every 300 s = 5 minutes)
 
     # Replace NaNs.
     Y_lowess = np.where(np.isnan(Y), 0, Y)
@@ -300,62 +278,54 @@ def main(experiment_root_folder=None):
 
     else:
         # Discrete action-schema.
-        dfs_a = [pd.DataFrame(run) for run in actions]
+        dfs_a = [pd.DataFrame(dict([(k,pd.Series(v)) for k,v in run.items()])) for run in actions]
 
-        if train_config['train_args']['tls_type'] == 'centralized':
-            NUM_ACTIONS = 7
-            tls_names = list(json_data['states'][0].keys())
-            d_total = []
-            for df in dfs_a:
-                d = {}
-                for index, row in df.iterrows():
-                    action_index = row[0]
-                    joined_action = {}
-                    for tls in tls_names:
-                        curr_action = action_index % NUM_ACTIONS
-                        joined_action[tls] = curr_action
-                        action_index //= NUM_ACTIONS
-                    d[index] = joined_action
-
-                d_total.append(pd.DataFrame.from_dict(d, "index"))
-                df_concat = pd.concat(d_total)
-        else:
-            df_concat = pd.concat(dfs_a)
+        df_concat = pd.concat(dfs_a)
 
         by_row_index = df_concat.groupby(df_concat.index)
         df_actions = by_row_index.mean()
 
+        df_np = df_actions.to_numpy()
+        max_action = np.nanmax(df_np)
 
+        # Non-smoothed.
         fig = plt.figure()
         fig.set_size_inches(FIGURE_X, FIGURE_Y)
 
-        window_size = min(len(df_actions)-1, 40)
+        for col in df_actions.columns:
+            plt.plot(df_actions[col], label=col)
+
+        plt.ylim(-0.2,max_action+0.5)
+
+        plt.xlabel('Decision step')
+        plt.ylabel('Action')
+        # plt.title('Actions per intersection')
+        plt.legend()
+
+        plt.savefig('{0}/actions_per_intersection.pdf'.format(output_folder_path), bbox_inches='tight', pad_inches=0)
+        plt.savefig('{0}/actions_per_intersection.png'.format(output_folder_path), bbox_inches='tight', pad_inches=0)
+
+        # Smoothed.
+        fig = plt.figure()
+        fig.set_size_inches(FIGURE_X, FIGURE_Y)
+
+        window_size = min(len(df_actions)-1, 20)
 
         for col in df_actions.columns:
             plt.plot(df_actions[col].rolling(window=window_size).mean(), label=col)
 
-        plt.ylim(-0.2,6.2)
-        plt.yticks(ticks=[0,1,2,3,4,5,6], labels=['(30,70)', '(36,63)', '(43,57)', '(50,50)', '(57,43)', '(63,37)', '(70,30)'])
+        plt.ylim(-0.2,max_action+0.5)
 
-        plt.xlabel('Cycle')
+        plt.xlabel('Decision step')
         plt.ylabel('Action')
         # plt.title('Actions per intersection')
         plt.legend()
-        plt.savefig('{0}/actions_per_intersection.pdf'.format(output_folder_path), bbox_inches='tight', pad_inches=0)
-        plt.savefig('{0}/actions_per_intersection.png'.format(output_folder_path), bbox_inches='tight', pad_inches=0)
+
+        plt.savefig('{0}/actions_per_intersection_smoothed.pdf'.format(output_folder_path), bbox_inches='tight', pad_inches=0)
+        plt.savefig('{0}/actions_per_intersection_smoothed.png'.format(output_folder_path), bbox_inches='tight', pad_inches=0)
 
         plt.close()
-        
-def redo_plots(root_folder=None):
-    if not root_folder:
-        args = get_arguments()
-        root_folder = args.path
-    exps = os.listdir(root_folder)
-    exps.sort()
-    for exp in exps:
-        main(experiment_root_folder=root_folder + "/" + exp)
 
 
 if __name__ == '__main__':
-    #redo_plots()
     main()
